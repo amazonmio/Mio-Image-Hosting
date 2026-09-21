@@ -25,7 +25,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer app.Close()
-	srv := &http.Server{Addr: env("ADDR", "127.0.0.1:8080"), Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	srv := server.NewHTTPServer(env("ADDR", "127.0.0.1:8080"), app.Handler())
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {

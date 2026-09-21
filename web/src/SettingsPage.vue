@@ -69,13 +69,14 @@ defineEmits<{ openPassword: []; logout: [] }>()
         <p>以下为当前服务的生效配置。</p>
       </div>
       <dl class="config-list">
+        <div><dt>站点名称</dt><dd>{{ config.site_name }}</dd></div>
         <div><dt>分享域名</dt><dd>{{ config.public_base_url || '跟随当前访问域名' }}</dd></div>
         <div><dt>单张上传限制</dt><dd>{{ formatSize(config.max_file_size) }}</dd></div>
         <div><dt>支持的图片格式</dt><dd>JPG、PNG、GIF、WebP</dd></div>
         <div><dt>访问控制</dt><dd>管理员账号登录</dd></div>
         <div><dt>存储用量</dt><dd>{{ allCount }} 张图片 · {{ formatSize(totalSize) }}</dd></div>
       </dl>
-      <p class="configuration-note">分享域名由服务端配置，修改后需重启服务。</p>
+      <p class="configuration-note">站点名称写在数据目录的 config.yaml；头像和标签页图标分别替换 avatar.webp、favicon.webp。修改后需重启服务。</p>
     </div>
   </section>
 </template>

@@ -6,3 +6,6 @@ import "embed"
 //
 //go:embed all:dist*
 var Files embed.FS
+
+//go:embed public/logo.webp
+var DefaultAvatar []byte

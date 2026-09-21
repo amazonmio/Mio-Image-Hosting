@@ -2,6 +2,19 @@ export type LinkFormat = 'url' | 'markdown'
 
 const linkFormatKey = 'mio-link-format'
 
+export function applySiteBranding(siteName: string, faviconURL: string) {
+  if (typeof document === 'undefined') return
+  if (siteName) document.title = siteName
+  const href = faviconURL || '/branding/favicon'
+  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+  if (!link) {
+    link = document.createElement('link')
+    link.rel = 'icon'
+    document.head.appendChild(link)
+  }
+  link.href = href
+}
+
 export function readLinkFormat(): LinkFormat {
   try {
     return localStorage.getItem(linkFormatKey) === 'markdown' ? 'markdown' : 'url'

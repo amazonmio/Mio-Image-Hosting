@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -36,12 +35,14 @@ const (
 )
 
 type App struct {
-	authMu                  sync.Mutex
-	setupKey, setupKeyPath  string
-	attempts                map[string]authAttempt
-	db                      *sql.DB
-	uploads, token, baseURL string
-	mu                      sync.Mutex
+	decodeSlots                                                chan struct{}
+	authMu                                                     sync.Mutex
+	setupKey, setupKeyPath                                     string
+	attempts                                                   map[string]authAttempt
+	db                                                         *sql.DB
+	dir, uploads, token, baseURL                               string
+	siteName, avatarPath, faviconPath, avatarMIME, faviconMIME string
+	mu                                                         sync.Mutex
 }
 type Picture struct {
 	ID        string `json:"id"`
@@ -84,7 +85,11 @@ func New(dir, token, baseURL string) (*App, error) {
 		db.Close()
 		return nil, err
 	}
-	app := &App{db: db, uploads: uploads, token: token, baseURL: strings.TrimRight(baseURL, "/")}
+	app := &App{decodeSlots: make(chan struct{}, 1), db: db, dir: abs, uploads: uploads, token: token, baseURL: strings.TrimRight(baseURL, "/")}
+	if err = app.loadSiteConfig(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err = app.initAuth(abs); err != nil {
 		db.Close()
 		return nil, err
@@ -199,11 +204,11 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {
-		fail(w, 400, "请求格式错误")
+		bodyReadError(w, err, "请求格式错误")
 		return false
 	}
-	if d.Decode(&struct{}{}) != io.EOF {
-		fail(w, 400, "请求格式错误")
+	if err := d.Decode(&struct{}{}); err != io.EOF {
+		bodyReadError(w, err, "请求格式错误")
 		return false
 	}
 	return true
@@ -216,8 +221,11 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", a.logout)
 	mux.HandleFunc("POST /api/auth/password", a.changePassword)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, 200, map[string]any{"max_file_size": maxFileSize, "auth_required": true, "public_base_url": a.baseURL})
+		reply(w, 200, a.siteConfig())
 	})
+	mux.HandleFunc("GET /branding/avatar", a.serveAvatar)
+	mux.HandleFunc("GET /branding/favicon", a.serveFavicon)
+	mux.HandleFunc("GET /favicon.ico", a.serveFavicon)
 	mux.Handle("GET /api/images", a.protect(http.HandlerFunc(a.listImages)))
 	mux.Handle("POST /api/images", a.protect(http.HandlerFunc(a.upload)))
 	mux.Handle("PATCH /api/images/{id}", a.protect(http.HandlerFunc(a.moveImage)))
@@ -236,15 +244,13 @@ func (a *App) Handler() http.Handler {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if r.URL.Path == "/" {
-			if _, err := fs.Stat(assets, "index.html"); err != nil {
-				http.Error(w, "Frontend is not built. Run: cd web && npm ci && npm run build; then restart Go.", 503)
-				return
-			}
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+			a.serveIndex(w, r, assets)
+			return
 		}
 		http.FileServer(http.FS(assets)).ServeHTTP(w, r)
 	}))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return withBodyDeadlines(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -252,7 +258,7 @@ func (a *App) Handler() http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 		}
 		mux.ServeHTTP(w, r)
-	})
+	}), jsonBodyTimeout, uploadBodyTimeout)
 }
 func (a *App) protect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -379,7 +385,7 @@ func (a *App) upload(w http.ResponseWriter, r *http.Request) {
 		if r.MultipartForm != nil {
 			r.MultipartForm.RemoveAll()
 		}
-		fail(w, 400, "上传无效或超过 20 MB 限制")
+		bodyReadError(w, err, "上传无效或超过 20 MB 限制")
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
@@ -406,9 +412,14 @@ func (a *App) upload(w http.ResponseWriter, r *http.Request) {
 		}
 		folderID = &id
 	}
-	cfg, format, err := image.DecodeConfig(f)
-	if err != nil || cfg.Width < 1 || cfg.Height < 1 || int64(cfg.Width)*int64(cfg.Height) > 80000000 {
-		fail(w, 400, "请选择有效的 JPG、PNG、GIF 或 WebP 图片（不超过 8000 万像素）")
+	cfg, format, err := a.validateImage(r.Context(), f)
+	if err != nil {
+		if errors.Is(err, errImageBusy) {
+			w.Header().Set("Retry-After", "1")
+			fail(w, http.StatusServiceUnavailable, err.Error())
+		} else {
+			fail(w, http.StatusBadRequest, err.Error())
+		}
 		return
 	}
 	exts := map[string]string{"jpeg": ".jpg", "png": ".png", "gif": ".gif", "webp": ".webp"}

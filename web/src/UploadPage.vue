@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import { UploadFilled, Download, Check, Close } from '@element-plus/icons-vue'
@@ -21,7 +21,8 @@ const fileInput = ref<HTMLInputElement>()
 const dragging = ref(false)
 const uploading = ref(false)
 const queue = ref<QueueItem[]>([])
-let key = 0
+let key = 0, generation = 0
+let controller: AbortController | undefined
 
 function addFiles(files: FileList | File[]) {
   for (const file of Array.from(files)) {
@@ -42,37 +43,48 @@ function inputFiles(event: Event) {
   input.value = ''
 }
 async function startUpload() {
+  if (uploading.value) return
+  const run = ++generation
   uploading.value = true
   emit('update:uploading', true)
   let success = 0
   const target = uploadFolder.value
   try {
     for (const item of queue.value) {
-      if (!props.authenticated) break
+      if (run !== generation || !props.authenticated) break
       if (item.status === 'done') continue
       item.status = 'uploading'
       item.percent = 0
       item.error = undefined
       try {
-        item.result = await upload(item.file, target, value => { item.percent = value })
+        controller = new AbortController()
+        item.result = await upload(item.file, target, value => { item.percent = value }, controller.signal)
+        if (run !== generation) break
         item.status = 'done'
         success++
       } catch (e) {
+        if (run !== generation) break
         item.status = 'error'
         item.error = e instanceof Error ? e.message : '上传失败'
       }
     }
-    if (success) {
+    if (success && run === generation) {
       ElMessage.success(`已上传 ${success} 张图片`)
       emit('uploaded')
     }
   } finally {
-    uploading.value = false
-    emit('update:uploading', false)
+    if (run === generation) { controller = undefined; uploading.value = false; emit('update:uploading', false) }
   }
 }
 
-defineExpose({ reset() { queue.value = [] } })
+function reset() {
+  ++generation
+  controller?.abort(); controller = undefined
+  queue.value = []; uploading.value = false
+  emit('update:uploading', false)
+}
+onBeforeUnmount(reset)
+defineExpose({ reset })
 </script>
 
 <template>

@@ -2,13 +2,15 @@
 import { computed, ref, watch } from 'vue'
 import { api, type AuthStatus } from './api'
 
-const props = defineProps<{ status: AuthStatus }>()
+const props = defineProps<{ status: AuthStatus; siteName?: string; avatarUrl?: string }>()
 const emit = defineEmits<{ ready: [status: AuthStatus]; refresh: [] }>()
 const step = ref(0)
 const username = ref(''), password = ref(''), confirmation = ref(''), setupKey = ref('')
 const busy = ref(false), error = ref('')
 const completed = ref<AuthStatus | null>(null)
 const initialized = computed(() => props.status.initialized)
+const siteName = computed(() => props.siteName || 'Mio 图床')
+const avatarUrl = computed(() => props.avatarUrl || '/branding/avatar')
 watch(initialized, () => { step.value = 0; password.value = ''; confirmation.value = ''; error.value = '' })
 async function submit() {
   if (busy.value) return
@@ -35,7 +37,7 @@ async function submit() {
 <template>
   <main class="auth-shell">
     <section class="auth-card" :aria-label="initialized ? '管理员登录' : '首次启动引导'">
-      <div class="auth-brand"><img class="auth-logo" src="/logo.webp" alt="Mio 图床 Logo"/><div><strong>Mio 图床</strong><span>你的图片，井然有序。</span></div></div>
+      <div class="auth-brand"><img class="auth-logo" :src="avatarUrl" :alt="siteName + ' Logo'"/><div><strong>{{ siteName }}</strong><span>你的图片，井然有序。</span></div></div>
       <template v-if="!initialized">
         <div class="setup-steps" aria-label="初始化进度"><span :class="{active:step===0}">1 · 欢迎</span><span :class="{active:step===1}">2 · 创建账号</span><span :class="{active:step===2}">3 · 完成</span></div>
         <template v-if="step === 0">
@@ -66,7 +68,7 @@ async function submit() {
         <el-button v-if="error" text @click="emit('refresh')">重新检查初始化状态</el-button>
       </template>
     </section>
-    <footer class="auth-footer">Mio · 简单存，轻松分享</footer>
+    <footer class="auth-footer">{{ siteName }} · 简单存，轻松分享</footer>
   </main>
 </template>
 

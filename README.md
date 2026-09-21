@@ -6,7 +6,7 @@
 - **文件夹管理**：搜索、预览、分页；创建或重命名文件夹；移动、下载和删除图片。
 - **系统设置**：浅色 / 深色 / 跟随系统，默认分享格式，查看用量，修改密码。
 
-格式：JPG / PNG / GIF / WebP，单张不超过 20 MB、8000 万像素，不接收 SVG。管理需要登录；`/i/{id}` 和 `/download/{id}` 公开访问。单层文件夹，移动图片不会改变直链。删除文件夹后图片回到未分类。
+格式：JPG / PNG / GIF / WebP，单张不超过 20 MB、3200 万像素，不接收 SVG。管理需要登录；`/i/{id}` 和 `/download/{id}` 公开访问。单层文件夹，移动图片不会改变直链。删除文件夹后图片回到未分类。
 
 ## 部署
 
@@ -40,17 +40,6 @@ docker run --rm -p 8080:8080 \
   mio-image-hosting:latest
 ```
 
-## 配置
-
-通过环境变量配置，不会读取 `.env`。
-
-| 变量 | 默认 | 用途 |
-| --- | --- | --- |
-| `ADDR` | `127.0.0.1:8080` | 监听地址。容器内必须是 `0.0.0.0:8080` |
-| `DATA_DIR` | `data` | 数据目录；生产建议用绝对路径 |
-| `PUBLIC_BASE_URL` | 空 | 直链根地址，例如 `https://img.example.com` |
-| `ADMIN_TOKEN` | 空 | 可选。给自动化客户端做 Bearer 鉴权，网页仍走账号登录 |
-
 不单独编译时，也可以直接构建二进制：
 
 ```sh
@@ -71,11 +60,51 @@ CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/mio-image-hosting .
 
 登录保存在服务端，有效期 7 天，重启不会退出。设置里可以退出或改密码；改密码后所有会话失效。同一来源连续登录失败超过 10 次会限制 15 分钟。反代后的访客可能共享这个限制。没有邮件找回、公开注册和多用户。
 
+## 配置
+
+通过环境变量配置运行参数，不会读取 `.env`。
+
+| 变量 | 默认 | 用途 |
+| --- | --- | --- |
+| `ADDR` | `127.0.0.1:8080` | 监听地址。容器内必须是 `0.0.0.0:8080` |
+| `DATA_DIR` | `data` | 数据目录；生产建议用绝对路径 |
+| `PUBLIC_BASE_URL` | 空 | 直链根地址，例如 `https://img.example.com` |
+| `ADMIN_TOKEN` | 空 | 可选。给自动化客户端做 Bearer 鉴权，网页仍走账号登录 |
+
+## 站点外观
+
+首次启动会在数据目录生成这些文件（Docker 容器内是 `/data`）：
+
+```text
+config.yaml     站点名称
+avatar.webp     侧栏和登录页头像
+favicon.webp    浏览器标签页图标
+```
+
+默认头像是内置这张。更换头像或标签页图标时，用自己的图片**覆盖**对应文件（不要放进 `uploads/`），然后重启服务。单个不超过 2 MB。
+
+站点名称改 `config.yaml`：
+
+```yaml
+site_name: Mio 图床
+```
+
+若文件不是 webp，可改名后在配置里指定，支持 png、jpg、webp、gif、ico：
+
+```yaml
+site_name: Mio 图床
+avatar: avatar.png
+favicon: favicon.ico
+```
+
 ## 备份
 
 ```text
-DATA_DIR/app.db      SQLite 元数据
-DATA_DIR/uploads/    图片原文件
+DATA_DIR/config.yaml    站点名称
+DATA_DIR/avatar.webp    头像
+DATA_DIR/favicon.webp   标签页图标
+DATA_DIR/app.db         SQLite 元数据
+DATA_DIR/uploads/       图片原文件
 ```
 
 先停服务，再复制整个 `DATA_DIR`（含可能存在的 WAL），恢复时把目录放回去再启动。不要只备份图片或只备份数据库。
@@ -92,7 +121,7 @@ npm ci
 npm run dev
 ```
 
-打开 Vite 给出的地址（默认 http://127.0.0.1:5173）。`/api`、`/i/`、`/download/` 会代理到 8080。请固定用 `127.0.0.1` 或 `localhost` 其中一种，不要混用。
+打开 Vite 给出的地址（默认 http://127.0.0.1:5173）。`/api`、`/i/`、`/download/`、`/branding` 会代理到 8080。请固定用 `127.0.0.1` 或 `localhost` 其中一种，不要混用。
 
 ```sh
 go test ./...
@@ -110,7 +139,7 @@ cd web && npm test && npm run build
 | POST | `/api/auth/login` | 登录 |
 | POST | `/api/auth/logout` | 退出 |
 | POST | `/api/auth/password` | 修改密码 |
-| GET | `/api/config` | 限制与直链域名（公开） |
+| GET | `/api/config` | 限制、直链域名、站点名称与图标（公开） |
 | GET | `/api/images?page=1&folder=0&q=` | 列表；`folder` 不传为全部，`0` 为未分类 |
 | POST | `/api/images` | 上传：`file`，可选 `folder_id` |
 | PATCH | `/api/images/{id}` | `{"folder_id":1}`，`null` 表示未分类 |
@@ -120,3 +149,9 @@ cd web && npm test && npm run build
 | DELETE | `/api/folders/{id}` | 删除文件夹，保留图片 |
 | GET | `/i/{id}` | 原图直链 |
 | GET | `/download/{id}` | 按原文件名下载 |
+
+## 上传完整性与读取期限
+
+图片入库前会完整解码 JPG、PNG、WebP；GIF 会检查并解码全部帧。保留原文件，不重新压缩。单图最多 3200 万像素，GIF 最多 500 帧且所有帧累计不超过 3200 万像素。每个服务实例一次只进行一个解码校验，繁忙时返回 503，可稍后重试。像素存储预算约 256 MB，实际进程内存还包含压缩数据、解码器和运行时开销。
+
+请求头最多读取 10 秒；普通 API 请求体最多 15 秒，图片上传请求体最多 4 分钟。读取超时返回 408，提示重试。前端上传总超时仍为 5 分钟；该读取期限不限制下载时间，也不是图像解码的 CPU 超时。

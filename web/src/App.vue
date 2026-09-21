@@ -10,7 +10,7 @@ import UploadPage from './UploadPage.vue'
 import FolderPage from './FolderPage.vue'
 import SettingsPage from './SettingsPage.vue'
 import { api, type AuthStatus, type Config, type Folder, type ImageList } from './api'
-import { folderSelectValue, formatSize, normalizeFolderID, readLinkFormat, writeLinkFormat, type LinkFormat } from './share'
+import { folderSelectValue, formatSize, normalizeFolderID, readLinkFormat, writeLinkFormat, applySiteBranding, type LinkFormat } from './share'
 
 type View = 'upload' | 'folders' | 'settings'
 const sections = [
@@ -36,7 +36,7 @@ const folders = ref<Folder[]>([])
 const data = ref<ImageList>({ items: [], total: 0, all_count: 0, total_size: 0, uncategorized_count: 0, page: 1, page_size: 48 })
 const currentFolder = ref<number | null>(null)
 const page = ref(1), search = ref(''), loading = ref(false), error = ref('')
-const config = ref<Config>({ max_file_size: 20 * 1024 * 1024, auth_required: false, public_base_url: '' })
+const config = ref<Config>({ max_file_size: 20 * 1024 * 1024, auth_required: false, public_base_url: '', site_name: 'Mio 图床', avatar_url: '/logo.webp', favicon_url: '/logo.webp' })
 const selected = ref<string[]>([])
 const auth = ref<AuthStatus>({ initialized: false, authenticated: false, setup_key_required: false })
 const booting = ref(true), bootError = ref('')
@@ -66,6 +66,7 @@ watch(page, load)
 watch(search, () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { if (page.value !== 1) page.value = 1; else load() }, 250) })
 function requireAuth() {
   ++request; auth.value.authenticated = false
+  currentPassword.value = ''; newPassword.value = ''; confirmPassword.value = ''; passwordError.value = ''; loading.value = false
   data.value = { items: [], total: 0, all_count: 0, total_size: 0, uncategorized_count: 0, page: 1, page_size: 48 }
   folders.value = []; selected.value = []; uploadPage.value?.reset()
   moveDialog.value = false; passwordDialog.value = false; copiedDialog.value = false
@@ -78,6 +79,7 @@ async function bootstrap() {
   try {
     const [status, settings] = await Promise.all([api<AuthStatus>('/auth/status'), api<Config>('/config')])
     auth.value = status; config.value = settings
+    applySiteBranding(settings.site_name, settings.favicon_url)
     if (status.authenticated) await load()
   } catch (e) { bootError.value = e instanceof Error ? e.message : '无法连接服务' }
   finally { booting.value = false }
@@ -154,18 +156,18 @@ async function moveImages() {
 <template>
   <div v-if="booting || bootError" class="auth-shell">
     <div class="auth-card">
-      <img class="auth-logo" src="/logo.webp" alt="Mio 图床 Logo" />
+      <img class="auth-logo" :src="config.avatar_url" :alt="config.site_name + ' Logo'" />
       <h1>{{ bootError ? '暂时无法连接' : '正在打开图片空间' }}</h1>
       <p>{{ bootError || '正在检查初始化和登录状态…' }}</p>
       <el-button v-if="bootError" type="primary" @click="bootstrap">重新连接</el-button>
     </div>
   </div>
-  <AuthGate v-else-if="!auth.authenticated" :status="auth" @ready="enterSpace" @refresh="bootstrap" />
+  <AuthGate v-else-if="!auth.authenticated" :status="auth" :site-name="config.site_name" :avatar-url="config.avatar_url" @ready="enterSpace" @refresh="bootstrap" />
   <div v-else class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="/" aria-label="Mio 图床首页">
-        <img class="brand-logo" src="/logo.webp" alt="Mio 图床 Logo" width="44" height="44" />
-        <span>Mio<span class="brand-caption">IMAGE HOSTING</span></span>
+      <a class="brand" href="/" :aria-label="config.site_name + '首页'">
+        <img class="brand-logo" :src="config.avatar_url" :alt="config.site_name + ' Logo'" width="44" height="44" />
+        <span class="brand-name">{{ config.site_name }}</span>
       </a>
       <div class="workspace-label">工作空间</div>
       <nav class="section-nav" aria-label="功能导航">
@@ -174,7 +176,7 @@ async function moveImages() {
         </button>
       </nav>
       <div class="storage-card"><span class="storage-dot"></span> 本地存储<span class="storage-value">{{ formatSize(data.total_size) }}</span><p>{{ data.all_count }} 张图片，妥善收藏每一帧。</p></div>
-      <div class="sidebar-footer">Mio · 简单存，轻松分享 <el-button v-if="config.auth_required" text circle :disabled="uploading" aria-label="退出登录" @click="logout"><el-icon><Lock /></el-icon></el-button></div>
+      <div class="sidebar-footer">{{ config.site_name }} · 简单存，轻松分享 <el-button v-if="config.auth_required" text circle :disabled="uploading" aria-label="退出登录" @click="logout"><el-icon><Lock /></el-icon></el-button></div>
     </aside>
 
     <main class="main-content">
@@ -185,17 +187,17 @@ async function moveImages() {
       <section class="page-content">
         <div class="page-heading">
           <div>
-            <div class="eyebrow">MIO · 个人图片空间</div>
+            <div class="eyebrow">{{ config.site_name }} · 个人图片空间</div>
             <h1>{{ section.label }}</h1>
             <p>{{ section.description }}</p>
           </div>
           <el-button v-if="view === 'folders'" type="primary" size="large" :icon="Plus" @click="editFolder()">新建文件夹</el-button>
         </div>
 
-        <UploadPage v-if="view === 'upload'" ref="uploadPage" v-model:folder="uploadFolder" :folders="folders" :authenticated="auth.authenticated" :max-file-size="config.max_file_size" :link-format="linkFormat" @update:uploading="uploading = $event" @uploaded="load" @copy="copy" />
+        <UploadPage v-show="view === 'upload'" ref="uploadPage" v-model:folder="uploadFolder" :folders="folders" :authenticated="auth.authenticated" :max-file-size="config.max_file_size" :link-format="linkFormat" @update:uploading="uploading = $event" @uploaded="load" @copy="copy" />
         <FolderPage v-if="view === 'folders'" :folders="folders" :data="data" :current-folder="currentFolder" :page="page" :search="search" :loading="loading" :error="error" :selected="selected" :mutating="mutating" :link-format="linkFormat" @navigate="navigate" @load="load" @update:search="search = $event" @update:page="page = $event" @update:selected="selected = $event" @edit-folder="editFolder" @delete-folder="deleteFolder" @open-upload="openUpload" @copy="copy" @open-move="openMove" @delete-images="deleteImages" />
         <SettingsPage v-if="view === 'settings'" v-model:theme-mode="themeMode" v-model:link-format="linkFormat" :username="auth.username" :is-dark="isDark" :config="config" :all-count="data.all_count" :total-size="data.total_size" :uploading="uploading" @open-password="openPassword" @logout="logout" />
-        <footer class="page-footer"><span>你的图片，井然有序。</span><span>MIO IMAGE HOSTING</span></footer>
+        <footer class="page-footer"><span>你的图片，井然有序。</span><span>{{ config.site_name }}</span></footer>
       </section>
     </main>
 
