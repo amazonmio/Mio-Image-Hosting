@@ -1,0 +1,9 @@
+/data/
+/bin/
+*.exe
+.env
+web/node_modules/
+web/dist/
+web/components.d.ts
+web/auto-imports.d.ts
+*.log

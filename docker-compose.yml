@@ -1,0 +1,17 @@
+services:
+  mio:
+    build: .
+    image: mio-image-hosting:latest
+    ports:
+      - "8080:8080"
+    environment:
+      ADDR: 0.0.0.0:8080
+      DATA_DIR: /data
+      # PUBLIC_BASE_URL: https://img.example.com
+      # ADMIN_TOKEN: replace-with-a-long-random-secret
+    volumes:
+      - mio-data:/data
+    restart: unless-stopped
+
+volumes:
+  mio-data:

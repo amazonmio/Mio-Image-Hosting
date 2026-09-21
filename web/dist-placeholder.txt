@@ -1,0 +1,2 @@
+This placeholder lets Go API development and tests run before the first frontend build.
+Production builds embed the generated dist directory. Run npm ci && npm run build in web first.

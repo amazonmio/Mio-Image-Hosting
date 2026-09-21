@@ -1,0 +1,70 @@
+/* Element Plus 组件使用官方暗色变量；这里适配图床自定义区域。 */
+:root { color-scheme: light; }
+.theme-note { padding-top: 16px; border-top: 1px solid #edf0f5; color: #7c879a; font-size: 12px; line-height: 1.8; }
+html.dark {
+  color-scheme: dark;
+  color: #e0e5ef;
+  background: #151922;
+  --el-color-primary: #92a3ff;
+  --el-color-primary-light-3: #7386df;
+  --el-color-primary-light-5: #5666ae;
+  --el-color-primary-light-7: #394570;
+  --el-color-primary-light-8: #2d3657;
+  --el-color-primary-light-9: #252d47;
+  --el-color-primary-dark-2: #b0bbff;
+  --el-bg-color: #1d2330;
+  --el-bg-color-page: #151922;
+  --el-bg-color-overlay: #232a38;
+  --el-fill-color-blank: #1d2330;
+  --el-fill-color-light: #2a3242;
+  --el-text-color-primary: #e0e5ef;
+  --el-text-color-regular: #c2cad9;
+  --el-text-color-secondary: #9eaac0;
+  --el-border-color: #3b4558;
+  --el-border-color-light: #323c4e;
+  --el-border-color-lighter: #2d3545;
+}
+html.dark body, html.dark .main-content { background: #151922; color: #e0e5ef; }
+html.dark .sidebar, html.dark .topbar { background: #1a202c; border-color: #2d3545; }
+html.dark .brand { color: #edf0f7; }
+html.dark .brand-caption, html.dark .workspace-label, html.dark .sidebar-footer,
+html.dark .page-footer, html.dark .eyebrow { color: #9ba7bc; }
+html.dark .nav-item { color: #b1bdd2; }
+html.dark .nav-item:hover, html.dark .download-button:hover { background: #252d3d; color: #b4bfff; }
+html.dark .nav-item.active { background: #2a3354; color: #b3bfff; }
+html.dark .storage-card { background: #202736; border-color: #313b4e; color: #c0cadd; }
+html.dark .storage-value, html.dark .topbar strong { color: #d4dcec; }
+html.dark .storage-card p, html.dark .private-badge, html.dark .topbar,
+html.dark .page-heading p, html.dark .card-heading p, html.dark .setting-row p,
+html.dark .config-list dt, html.dark .configuration-note,
+html.dark .theme-note, html.dark .field-label, html.dark .dialog-description,
+html.dark .upload-controls > span, html.dark .queue-info small { color: #a2aec3; }
+html.dark .breadcrumb-divider { color: #65738b; }
+html.dark .upload-panel, html.dark .queue-panel, html.dark .settings-card,
+html.dark .folder-card, html.dark .image-card, html.dark .empty-state,
+html.dark .loading-state { background: #1d2330; border-color: #343e50; color: #e0e5ef; }
+html.dark .folder-card > .el-icon { color: #a3b0f4; }
+html.dark .folder-card span, html.dark .image-meta, html.dark .empty-state p,
+html.dark .empty-hint, html.dark .selection-bar .el-checkbox__label { color: #a4b0c5; }
+html.dark .folder-card.active { background: #29324e; border-color: #7f92e1; }
+html.dark .folder-card:hover, html.dark .image-card:hover { border-color: #6679b8; }
+html.dark .image-card.selected { border-color: #91a2f5; box-shadow: 0 0 0 1px #91a2f5; }
+html.dark .image-actions, html.dark .queue-item,
+html.dark .config-list > div, html.dark .theme-note { border-color: #343e50; }
+html.dark .image-actions > .el-button, html.dark .image-actions .el-dropdown .el-button,
+html.dark .download-button { color: #abb9d8; }
+html.dark .image-preview { background-color: #252d3a; background-image: linear-gradient(45deg,#303a4a 25%,transparent 25%),linear-gradient(-45deg,#303a4a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#303a4a 75%),linear-gradient(-45deg,transparent 75%,#303a4a 75%); }
+html.dark .image-checkbox { background: #202838e8; }
+html.dark .search-input .el-input__wrapper { box-shadow: 0 0 0 1px #3b4558; }
+html.dark .search-input .el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--el-color-primary); }
+html.dark .dropzone { background: #202839; border-color: #54658e; color: #c0cce1; }
+html.dark .dropzone > .el-icon { color: #99abe5; }
+html.dark .dropzone strong span { color: #b0bfff; }
+html.dark .dropzone small { color: #a5b4cf; }
+html.dark .dropzone.dragging, html.dark .dropzone:hover:not(:disabled) { background: #2b3652; border-color: #91a5ec; }
+html.dark .empty-art-back { background: #29334c; border-color: #3b496a; }
+html.dark .empty-art-front { background: #202a3d; border-color: #53658e; color: #a5b6ef; }
+html.dark .empty-art-dot { background: #6277ad; border-color: #202a3d; }
+html.dark .success-text { color: #70d6af; }
+html.dark .danger-text { color: #ff969b; }
+html.dark .el-button--primary { --el-button-text-color: #151b30; --el-button-hover-text-color: #151b30; --el-button-active-text-color: #151b30; }
