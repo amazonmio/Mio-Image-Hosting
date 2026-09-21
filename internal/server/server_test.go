@@ -283,7 +283,7 @@ func TestMoveToUncategorizedZero(t *testing.T) {
 	}
 }
 
-func TestOrphanUploadCleanupAndSchemaVersion(t *testing.T) {
+func TestOrphanUploadQuarantineAndSchemaVersion(t *testing.T) {
 	dir := t.TempDir()
 	a, err := New(dir, "", "")
 	if err != nil {
@@ -305,7 +305,15 @@ func TestOrphanUploadCleanupAndSchemaVersion(t *testing.T) {
 	}
 	defer a.Close()
 	if _, err = os.Stat(orphan); !os.IsNotExist(err) {
-		t.Fatal("orphan upload remained")
+		t.Fatal("orphan should leave the public upload directory")
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "quarantine", "*", "deadbeef.png"))
+	if err != nil || len(matches) != 1 {
+		t.Fatal("orphan was not quarantined", matches, err)
+	}
+	preserved, err := os.ReadFile(matches[0])
+	if err != nil || string(preserved) != "nope" {
+		t.Fatal("quarantined content changed")
 	}
 	request(t, a, "GET", "/i/"+p.ID, "", 200)
 }

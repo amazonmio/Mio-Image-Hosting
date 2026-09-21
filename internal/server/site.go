@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -55,8 +54,7 @@ type siteFile struct {
 
 func (a *App) loadSiteConfig() error {
 	a.siteName = defaultSiteName
-	a.avatarPath, a.faviconPath = "", ""
-	a.avatarMIME, a.faviconMIME = "", ""
+	a.avatar, a.favicon = brandAsset{}, brandAsset{}
 	if err := a.ensureDefaultBrandFiles(); err != nil {
 		return err
 	}
@@ -95,29 +93,34 @@ func (a *App) loadSiteConfig() error {
 }
 
 func (a *App) ensureDefaultBrandFiles() error {
+	root, err := os.OpenRoot(a.dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	for _, name := range []string{defaultAvatarFile, defaultFaviconFile} {
-		path := filepath.Join(a.dir, name)
-		_, err := os.Stat(path)
-		if err == nil {
+		f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if os.IsExist(err) {
 			continue
 		}
-		if !os.IsNotExist(err) {
+		if err != nil {
 			return err
 		}
-		if err = os.WriteFile(path, frontend.DefaultAvatar, 0600); err != nil {
+		_, writeErr := f.Write(frontend.DefaultAvatar)
+		closeErr := f.Close()
+		if err = errors.Join(writeErr, closeErr); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
 func (a *App) useBrandFiles(avatar, favicon string) error {
 	var err error
-	a.avatarPath, a.avatarMIME, err = resolveBrandFile(a.dir, avatar, "avatar")
+	a.avatar, err = a.readBrandAsset(avatar, "avatar")
 	if err != nil {
 		return err
 	}
-	a.faviconPath, a.faviconMIME, err = resolveBrandFile(a.dir, favicon, "favicon")
+	a.favicon, err = a.readBrandAsset(favicon, "favicon")
 	return err
 }
 
@@ -133,42 +136,6 @@ func validateSiteName(name string) error {
 	return nil
 }
 
-func resolveBrandFile(dataDir, name, field string) (string, string, error) {
-	name = strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
-	if name == "" {
-		return "", "", nil
-	}
-	if strings.Contains(name, "\\") || !filepath.IsLocal(filepath.FromSlash(name)) {
-		return "", "", fmt.Errorf("%s 路径无效", field)
-	}
-	full := filepath.Join(dataDir, filepath.FromSlash(name))
-	rel, err := filepath.Rel(dataDir, full)
-	if err != nil || !filepath.IsLocal(rel) {
-		return "", "", fmt.Errorf("%s 路径无效", field)
-	}
-	base := strings.ToLower(rel)
-	if base == "uploads" || strings.HasPrefix(base, "uploads"+string(os.PathSeparator)) ||
-		base == "app.db" || strings.HasPrefix(base, "app.db-") || base == "config.yaml" || base == "setup-key.txt" {
-		return "", "", fmt.Errorf("%s 不能使用数据目录中的系统文件", field)
-	}
-	ext := strings.ToLower(filepath.Ext(full))
-	mime, ok := brandMIME[ext]
-	if !ok {
-		return "", "", fmt.Errorf("%s 仅支持 png、jpg、webp、gif、ico", field)
-	}
-	info, err := os.Stat(full)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", "", fmt.Errorf("%s 文件不存在: %s", field, name)
-		}
-		return "", "", err
-	}
-	if info.IsDir() || info.Size() == 0 || info.Size() > maxBrandFileSize {
-		return "", "", fmt.Errorf("%s 文件无效", field)
-	}
-	return full, mime, nil
-}
-
 func (a *App) siteConfig() map[string]any {
 	return map[string]any{
 		"max_file_size":   maxFileSize,
@@ -181,28 +148,28 @@ func (a *App) siteConfig() map[string]any {
 }
 
 func (a *App) serveAvatar(w http.ResponseWriter, r *http.Request) {
-	a.serveBrand(w, r, a.avatarPath, a.avatarMIME)
+	a.serveBrand(w, r, a.avatar)
 }
 
 func (a *App) serveFavicon(w http.ResponseWriter, r *http.Request) {
-	a.serveBrand(w, r, a.faviconPath, a.faviconMIME)
+	a.serveBrand(w, r, a.favicon)
 }
 
-func (a *App) serveBrand(w http.ResponseWriter, r *http.Request, path, contentType string) {
+func (a *App) serveBrand(w http.ResponseWriter, r *http.Request, asset brandAsset) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if path != "" {
-		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "public, max-age=300")
-		http.ServeFile(w, r, path)
-		return
+	if len(asset.data) == 0 {
+		asset = brandAsset{data: frontend.DefaultAvatar, contentType: "image/webp"}
 	}
-	w.Header().Set("Content-Type", "image/webp")
+	w.Header().Set("Content-Type", asset.contentType)
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	http.ServeContent(w, r, "logo.webp", time.Time{}, bytes.NewReader(frontend.DefaultAvatar))
+	if asset.etag != "" {
+		w.Header().Set("ETag", asset.etag)
+	}
+	http.ServeContent(w, r, "branding", asset.modified, bytes.NewReader(asset.data))
 }
 
 func injectSite(page []byte, siteName string) []byte {

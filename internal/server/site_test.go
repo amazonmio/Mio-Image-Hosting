@@ -89,7 +89,7 @@ func TestCustomSiteBranding(t *testing.T) {
 		t.Fatal(cfg["site_name"])
 	}
 	avatar := request(t, a, "GET", "/branding/avatar", "", 200)
-	if avatar.Header().Get("Content-Type") != "image/webp" || !bytes.Equal(avatar.Body.Bytes(), payload) {
+	if avatar.Header().Get("Content-Type") != "image/png" || !bytes.Equal(avatar.Body.Bytes(), payload) {
 		t.Fatalf("avatar: %s %d", avatar.Header().Get("Content-Type"), avatar.Body.Len())
 	}
 	icon := request(t, a, "GET", "/branding/favicon", "", 200)

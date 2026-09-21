@@ -35,14 +35,15 @@ const (
 )
 
 type App struct {
-	decodeSlots                                                chan struct{}
-	authMu                                                     sync.Mutex
-	setupKey, setupKeyPath                                     string
-	attempts                                                   map[string]authAttempt
-	db                                                         *sql.DB
-	dir, uploads, token, baseURL                               string
-	siteName, avatarPath, faviconPath, avatarMIME, faviconMIME string
-	mu                                                         sync.Mutex
+	decodeSlots                  chan struct{}
+	authMu                       sync.Mutex
+	setupKey, setupKeyPath       string
+	attempts                     map[string]authAttempt
+	db                           *sql.DB
+	dir, uploads, token, baseURL string
+	siteName                     string
+	avatar, favicon              brandAsset
+	mu                           sync.Mutex
 }
 type Picture struct {
 	ID        string `json:"id"`
@@ -136,56 +137,6 @@ func normalizeFolderID(id *int64) *int64 {
 	return id
 }
 
-func (a *App) recoverUploads() error {
-	known := map[string]struct{}{}
-	rows, err := a.db.Query("SELECT id FROM images")
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
-		}
-		known[id] = struct{}{}
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(a.uploads)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		path := filepath.Join(a.uploads, name)
-		switch {
-		case strings.HasSuffix(name, ".trash"):
-			id := strings.TrimSuffix(name, ".trash")
-			if _, ok := known[id]; ok {
-				err = os.Rename(path, filepath.Join(a.uploads, id))
-			} else {
-				err = os.Remove(path)
-			}
-		case strings.HasPrefix(name, ".upload-"):
-			err = os.Remove(path)
-		default:
-			if _, ok := known[name]; !ok {
-				err = os.Remove(path)
-			}
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
 func (a *App) Close() error { return a.db.Close() }
 func reply(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
