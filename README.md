@@ -13,8 +13,8 @@
 用 Docker 即可：
 
 ```sh
-git clone https://github.com/amazonmio/mio-image-hosting.git
-cd mio-image-hosting
+git clone https://github.com/amazonmio/Mio-Image-Hosting.git
+cd Mio-Image-Hosting
 docker compose up -d --build
 ```
 
