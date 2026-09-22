@@ -43,7 +43,7 @@ async function submit() {
         <template v-if="step === 0">
           <h1>开启你的图片空间</h1>
           <p class="auth-description">只需创建一个管理员账号，就可以开始上传、分类和分享图片。</p>
-          <div class="setup-features"><div><strong>轻松上传</strong><span>支持 JPG、PNG、GIF 和 WebP，单张最大 20 MB。</span></div><div><strong>有序收藏</strong><span>用文件夹整理图片，移动分类也不会改变直链。</span></div><div><strong>专属管理</strong><span>图片管理需要登录；分享出去的图片直链可公开访问。</span></div></div>
+          <div class="setup-features"><div><strong>轻松上传</strong><span>支持拖拽、粘贴或选择 JPG、PNG、GIF 和 WebP，单张最大 20 MB。</span></div><div><strong>有序收藏</strong><span>用文件夹整理图片，移动分类也不会改变直链。</span></div><div><strong>专属管理</strong><span>图片管理需要登录；分享出去的图片直链可公开访问。</span></div></div>
           <p class="auth-help">已有图片和文件夹会保留。初始化只需完成一次。</p>
           <el-button class="auth-submit" type="primary" size="large" @click="step = 1">开始设置</el-button>
         </template>

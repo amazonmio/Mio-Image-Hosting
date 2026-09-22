@@ -28,6 +28,7 @@ const emit = defineEmits<{
   copy: [text: string]
   openMove: [ids: string[]]
   deleteImages: [ids: string[]]
+  renameImage: [picture: Picture]
 }>()
 
 const title = computed(() => folderTitle(props.currentFolder, props.folders))
@@ -45,6 +46,7 @@ function selectAll(checked: unknown) {
 }
 function imageCommand(command: string, picture: Picture) {
   if (command === 'markdown') emit('copy', markdown(picture.name, picture.url))
+  else if (command === 'rename') emit('renameImage', picture)
   else if (command === 'move') emit('openMove', [picture.id])
   else if (command === 'delete') emit('deleteImages', [picture.id])
 }
@@ -99,7 +101,7 @@ function imageCommand(command: string, picture: Picture) {
       <p>{{ search ? '试试其他关键词，或清空搜索查看所有图片。' : '上传第一张图片，开启你的轻量图片空间。' }}</p>
       <el-button v-if="search" @click="emit('update:search', '')">清空搜索</el-button>
       <el-button v-else type="primary" :icon="UploadFilled" @click="emit('openUpload')">上传第一张图片</el-button>
-      <span v-if="!search" class="empty-hint">支持拖拽上传 · 单张最大 20 MB</span>
+      <span v-if="!search" class="empty-hint">支持拖拽或粘贴上传 · 单张最大 20 MB</span>
     </div>
     <div v-else class="image-grid" :aria-busy="loading">
       <article v-for="(picture, index) in data.items" :key="picture.id" :class="['image-card', { selected: selected.includes(picture.id) }]">
@@ -123,6 +125,7 @@ function imageCommand(command: string, picture: Picture) {
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="markdown">复制 Markdown</el-dropdown-item>
+                  <el-dropdown-item command="rename" :disabled="mutating">重命名</el-dropdown-item>
                   <el-dropdown-item command="move">移动到文件夹</el-dropdown-item>
                   <el-dropdown-item command="delete" divided :disabled="mutating"><span class="danger-text">删除图片</span></el-dropdown-item>
                 </el-dropdown-menu>

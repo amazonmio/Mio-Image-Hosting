@@ -326,8 +326,35 @@ func TestOrphanUploadQuarantineAndSchemaVersion(t *testing.T) {
 	request(t, a, "GET", "/i/"+p.ID, "", 200)
 }
 
-func TestShareXStyleUpload(t *testing.T) {
-	a := testApp(t, "sharex-secret")
+func TestRenameImage(t *testing.T) {
+	a := testApp(t, "")
+	p := decode[Picture](t, sendUpload(t, a, pngBytes(t), "", 201))
+	if p.Name != "旅行照片.png" {
+		t.Fatal(p.Name)
+	}
+	request(t, a, "PATCH", "/api/images/"+p.ID, `{"name":" 封面图.png "}`, 200)
+	list := decode[struct{ Items []Picture }](t, request(t, a, "GET", "/api/images?q=封面", "", 200))
+	if len(list.Items) != 1 || list.Items[0].Name != "封面图.png" || list.Items[0].URL != p.URL {
+		t.Fatalf("rename: %+v", list.Items)
+	}
+	old := decode[struct{ Total int }](t, request(t, a, "GET", "/api/images?q=旅行照片", "", 200))
+	if old.Total != 0 {
+		t.Fatal("search still matched the old name")
+	}
+	download := request(t, a, "GET", "/download/"+p.ID, "", 200)
+	disp := download.Header().Get("Content-Disposition")
+	if !strings.Contains(disp, "封面图.png") && !strings.Contains(disp, "%E5%B0%81%E9%9D%A2%E5%9B%BE.png") {
+		t.Fatal(disp)
+	}
+	request(t, a, "GET", "/i/"+p.ID, "", 200)
+	request(t, a, "PATCH", "/api/images/"+p.ID, `{}`, 400)
+	request(t, a, "PATCH", "/api/images/"+p.ID, `{"name":""}`, 400)
+	request(t, a, "PATCH", "/api/images/"+p.ID, `{"name":"a/b.png"}`, 400)
+	request(t, a, "PATCH", "/api/images/missing.png", `{"name":"x.png"}`, 404)
+}
+
+func TestBearerTokenUpload(t *testing.T) {
+	a := testApp(t, "api-secret")
 	payload := pngBytes(t)
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -346,7 +373,6 @@ func TestShareXStyleUpload(t *testing.T) {
 	post := func(token string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "/api/images", bytes.NewReader(raw))
 		r.Header.Set("Content-Type", contentType)
-		r.Header.Set("User-Agent", "ShareX/17.0.0")
 		if token != "" {
 			r.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -354,9 +380,9 @@ func TestShareXStyleUpload(t *testing.T) {
 		a.Handler().ServeHTTP(w, r)
 		return w
 	}
-	ok := post("sharex-secret")
+	ok := post("api-secret")
 	if ok.Code != 201 {
-		t.Fatalf("sharex upload: %d %s", ok.Code, ok.Body.String())
+		t.Fatalf("token upload: %d %s", ok.Code, ok.Body.String())
 	}
 	p := decode[Picture](t, ok)
 	if p.URL != "https://img.example.com/i/"+p.ID || p.ThumbURL == "" {

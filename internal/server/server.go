@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	frontend "github.com/amazonmio/mio-image-hosting/web"
 	_ "golang.org/x/image/webp"
@@ -190,7 +192,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /favicon.ico", a.serveFavicon)
 	mux.Handle("GET /api/images", a.protect(http.HandlerFunc(a.listImages)))
 	mux.Handle("POST /api/images", a.protect(http.HandlerFunc(a.upload)))
-	mux.Handle("PATCH /api/images/{id}", a.protect(http.HandlerFunc(a.moveImage)))
+	mux.Handle("PATCH /api/images/{id}", a.protect(http.HandlerFunc(a.updateImage)))
 	mux.Handle("DELETE /api/images/{id}", a.protect(http.HandlerFunc(a.deleteImage)))
 	mux.Handle("GET /api/folders", a.protect(http.HandlerFunc(a.listFolders)))
 	mux.Handle("POST /api/folders", a.protect(http.HandlerFunc(a.createFolder)))
@@ -450,21 +452,79 @@ func (a *App) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	reply(w, 201, p)
 }
-func (a *App) moveImage(w http.ResponseWriter, r *http.Request) {
+func parseImageName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if !utf8.ValidString(name) || utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 180 {
+		return "", errors.New("图片名称须为 1–180 个字符")
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return "", errors.New("图片名称不能包含路径字符")
+	}
+	for _, r := range name {
+		if r == '\uFFFD' || unicode.IsControl(r) {
+			return "", errors.New("图片名称不能包含控制字符")
+		}
+	}
+	return name, nil
+}
+
+func (a *App) updateImage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		FolderID *int64 `json:"folder_id"`
+		FolderID json.RawMessage `json:"folder_id"`
+		Name     json.RawMessage `json:"name"`
 	}
 	if !readJSON(w, r, &body) {
 		return
 	}
-	body.FolderID = normalizeFolderID(body.FolderID)
+	hasFolder := len(body.FolderID) > 0
+	hasName := len(body.Name) > 0
+	if !hasFolder && !hasName {
+		fail(w, 400, "请提供名称或文件夹")
+		return
+	}
+	var folderID *int64
+	if hasFolder {
+		if string(body.FolderID) != "null" {
+			var id int64
+			if err := json.Unmarshal(body.FolderID, &id); err != nil {
+				fail(w, 400, "文件夹无效")
+				return
+			}
+			folderID = &id
+		}
+		folderID = normalizeFolderID(folderID)
+	}
+	var name string
+	if hasName {
+		if err := json.Unmarshal(body.Name, &name); err != nil {
+			fail(w, 400, "名称无效")
+			return
+		}
+		parsed, err := parseImageName(name)
+		if err != nil {
+			fail(w, 400, err.Error())
+			return
+		}
+		name = parsed
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if !a.folderExists(body.FolderID) {
+	if hasFolder && !a.folderExists(folderID) {
 		fail(w, 400, "文件夹不存在")
 		return
 	}
-	result, err := a.db.ExecContext(r.Context(), "UPDATE images SET folder_id=? WHERE id=?", body.FolderID, r.PathValue("id"))
+	sets := make([]string, 0, 2)
+	args := make([]any, 0, 3)
+	if hasFolder {
+		sets = append(sets, "folder_id=?")
+		args = append(args, folderID)
+	}
+	if hasName {
+		sets = append(sets, "name=?")
+		args = append(args, name)
+	}
+	args = append(args, r.PathValue("id"))
+	result, err := a.db.ExecContext(r.Context(), "UPDATE images SET "+strings.Join(sets, ", ")+" WHERE id=?", args...)
 	if err != nil {
 		internal(w, err)
 		return

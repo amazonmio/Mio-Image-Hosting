@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { folderSelectValue, folderTitle, formatSize, fullURL, markdown, normalizeFolderID, shareText, sharexRequestURL, sharexTokenPlaceholder, sharexUploader } from './share'
+import { filesFromClipboardItems, folderSelectValue, folderTitle, formatSize, fullURL, markdown, normalizeFolderID, normalizeUploadFile, pasteImageName, shareText, validImageName } from './share'
 
 describe('normalizeFolderID', () => {
   it('treats missing and zero as uncategorized', () => {
@@ -39,44 +39,53 @@ describe('share helpers', () => {
     expect(folderTitle(0, folders)).toBe('未分类')
     expect(folderTitle(2, folders)).toBe('博客')
   })
-})
 
-describe('ShareX uploader', () => {
-  it('builds a custom uploader that builds absolute result URLs from the uploaded image ID', () => {
-    expect(sharexRequestURL('https://img.example.com/')).toBe('https://img.example.com/api/images')
-    const uploader = sharexUploader({ siteName: '猫猫图床', requestURL: 'https://img.example.com/api/images', token: ' secret ' })
-    expect(uploader.RequestURL).toBe('https://img.example.com/api/images')
-    expect(uploader.FileFormName).toBe('file')
-    expect(uploader.Headers.Authorization).toBe('Bearer secret')
-    expect(uploader.URL).toBe('https://img.example.com/i/{json:id}')
-    expect(uploader.ThumbnailURL).toBe('https://img.example.com/t/{json:id}')
-    expect(uploader.ErrorMessage).toBe('{json:error}')
-    expect(uploader.Name).toBe('猫猫图床')
-  })
-
-  it('keeps a placeholder when the token is empty', () => {
-    const uploader = sharexUploader({ siteName: '', requestURL: 'http://127.0.0.1:8080/api/images', token: '' })
-    expect(uploader.Headers.Authorization).toBe('Bearer ' + sharexTokenPlaceholder)
-    expect(uploader.Name).toBe('Mio 图床')
+  it('validates image display names', () => {
+    expect(validImageName(' 封面.png ')).toBe(true)
+    expect(validImageName('')).toBe(false)
+    expect(validImageName('a/b.png')).toBe(false)
+    expect(validImageName('a\\b.png')).toBe(false)
+    expect(validImageName('x'.repeat(181))).toBe(false)
   })
 })
 
+describe('clipboard upload files', () => {
+  it('keeps named images and names pasted screenshots', () => {
+    const named = new File([new Uint8Array([1, 2, 3])], 'cover.PNG', { type: 'image/png' })
+    expect(normalizeUploadFile(named)).toBe(named)
+    const stamp = Date.UTC(2026, 8, 22, 2, 34, 5)
+    const pasted = normalizeUploadFile(new File([new Uint8Array([1, 2, 3])], 'image', { type: 'image/png' }), stamp)
+    expect(pasted?.name).toBe(pasteImageName('.png', stamp))
+    expect(pasted?.type).toBe('image/png')
+    expect(normalizeUploadFile(new File([new Uint8Array([1])], 'notes.txt', { type: 'text/plain' }))).toBeNull()
+  })
 
-describe('ShareX without a public domain', () => {
-  it('keeps absolute localhost links even when API response URLs are relative', () => {
-    const u = sharexUploader({siteName:'Mio',requestURL:sharexRequestURL('http://127.0.0.1:8080'),token:'test'})
-    const response = {id:'abc.png',url:'/i/abc.png',thumb_url:'/t/abc.png'}
-    expect(u.URL.replace('{json:id}',response.id)).toBe('http://127.0.0.1:8080/i/abc.png')
-    expect(u.ThumbnailURL.replace('{json:id}',response.id)).toBe('http://127.0.0.1:8080/t/abc.png')
+  it('reads image items from a clipboard list and skips text', () => {
+    const image = new File([new Uint8Array([9])], '', { type: 'image/jpeg' })
+    const files = filesFromClipboardItems([
+      { kind: 'string', getAsFile: () => null },
+      { kind: 'file', getAsFile: () => image },
+      { kind: 'file', getAsFile: () => new File([new Uint8Array([1])], 'readme.md', { type: 'text/markdown' }) },
+    ], Date.UTC(2026, 0, 2, 3, 4, 5))
+    expect(files).toHaveLength(1)
+    expect(files[0].name).toMatch(/\.jpg$/)
+    expect(files[0].type).toBe('image/jpeg')
   })
-  it('does not concatenate a returned absolute URL twice', () => {
-    const u = sharexUploader({siteName:'Mio',requestURL:'https://img.example.com/api/images',token:'test'})
-    const response = {id:'abc.png',url:'https://img.example.com/i/abc.png'}
-    expect(u.URL.replace('{json:id}',response.id)).toBe(response.url)
+})
+
+
+describe('image name Unicode validation', () => {
+  it('rejects embedded C0 and C1 controls, including DEL', () => {
+    const controls = [...Array.from({length:32},(_,i)=>i), ...Array.from({length:33},(_,i)=>0x7f+i)]
+    for (const code of controls) expect(validImageName('a'+String.fromCodePoint(code)+'b.png')).toBe(false)
   })
-  it('rejects unusable uploader origins', () => {
-    expect(sharexRequestURL('')).toBe('')
-    expect(sharexRequestURL('file:///tmp/images')).toBe('')
-    expect(sharexRequestURL('not-a-url')).toBe('')
+  it('rejects replacement characters and lone UTF-16 surrogates', () => {
+    for (const code of [0xfffd,0xd800,0xdbff,0xdc00,0xdfff]) expect(validImageName('a'+String.fromCharCode(code)+'b.png')).toBe(false)
+  })
+  it('keeps valid Unicode names and counts code points', () => {
+    expect(validImageName(' 封面😀.png ')).toBe(true)
+    expect(validImageName('a'+String.fromCodePoint(0x7e,0xa0,0xfffc,0x10000)+'b.png')).toBe(true)
+    expect(validImageName('😀'.repeat(180))).toBe(true)
+    expect(validImageName('😀'.repeat(181))).toBe(false)
   })
 })

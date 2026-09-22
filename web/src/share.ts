@@ -63,40 +63,64 @@ export function folderTitle(id: number | null, folders: { id: number; name: stri
   return folders.find(folder => folder.id === id)?.name || '文件夹'
 }
 
-export const sharexTokenPlaceholder = 'YOUR_ADMIN_TOKEN'
-
-export function sharexRequestURL(base: string) {
-  try { const url = new URL(base.trim()); return ['http:', 'https:'].includes(url.protocol) ? url.origin + '/api/images' : '' } catch { return '' }
+export function validImageName(name: string) {
+  const value = name.trim()
+  const chars = [...value]
+  if (chars.length < 1 || chars.length > 180) return false
+  if (/[/\\]/.test(value)) return false
+  return chars.every(char => {
+    const code = char.codePointAt(0) ?? 0
+    // Match Go unicode.IsControl and its rejection of U+FFFD. Lone UTF-16
+    // surrogates become U+FFFD when decoded by the Go JSON parser.
+    return code >= 0x20 && !(code >= 0x7f && code <= 0x9f)
+      && code !== 0xfffd && !(code >= 0xd800 && code <= 0xdfff)
+  })
 }
 
-export function sharexUploader(options: { siteName: string; requestURL: string; token: string }) {
-  const token = options.token.trim() || sharexTokenPlaceholder
-  const origin = new URL(options.requestURL).origin
-  return {
-    Version: '17.0.0',
-    Name: options.siteName.trim() || 'Mio 图床',
-    DestinationType: 'ImageUploader',
-    RequestMethod: 'POST',
-    RequestURL: options.requestURL,
-    Headers: { Authorization: 'Bearer ' + token },
-    Body: 'MultipartFormData',
-    FileFormName: 'file',
-    URL: origin + '/i/{json:id}',
-    ThumbnailURL: origin + '/t/{json:id}',
-    ErrorMessage: '{json:error}',
+const uploadExt: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+}
+
+function pad(value: number) {
+  return String(value).padStart(2, '0')
+}
+
+export function pasteImageName(ext: string, now = Date.now()) {
+  const date = new Date(now)
+  return `粘贴图片-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}${ext}`
+}
+
+export function normalizeUploadFile(file: File, now = Date.now()): File | null {
+  const type = file.type.toLowerCase()
+  let ext = uploadExt[type]
+  if (!ext) {
+    const match = file.name.match(/\.(jpe?g|png|gif|webp)$/i)
+    if (!match) return null
+    ext = match[0].toLowerCase() === '.jpeg' ? '.jpg' : match[0].toLowerCase()
   }
+  if (/\.(jpe?g|png|gif|webp)$/i.test(file.name)) return file
+  const mime = ext === '.jpg' ? 'image/jpeg' : ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/webp'
+  return new File([file], pasteImageName(ext, now), { type: mime, lastModified: file.lastModified })
 }
 
-export function sharexUploaderJSON(options: { siteName: string; requestURL: string; token: string }) {
-  return JSON.stringify(sharexUploader(options), null, 2)
+export function filesFromClipboardItems(items: ArrayLike<{ kind: string; getAsFile: () => File | null }> | null | undefined, now = Date.now()): File[] {
+  if (!items) return []
+  const files: File[] = []
+  for (const item of Array.from(items)) {
+    if (item.kind !== 'file') continue
+    const file = item.getAsFile()
+    if (!file) continue
+    const normalized = normalizeUploadFile(file, now)
+    if (normalized) files.push(normalized)
+  }
+  return files
 }
 
-export function downloadTextFile(name: string, text: string) {
-  if (typeof document === 'undefined') return
-  const href = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = href
-  link.download = name
-  link.click()
-  URL.revokeObjectURL(href)
+export function shouldIgnorePasteTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }

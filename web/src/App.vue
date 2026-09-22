@@ -9,14 +9,14 @@ import AuthGate from './AuthGate.vue'
 import UploadPage from './UploadPage.vue'
 import FolderPage from './FolderPage.vue'
 import SettingsPage from './SettingsPage.vue'
-import { api, type AuthStatus, type Config, type Folder, type ImageList } from './api'
-import { folderSelectValue, formatSize, normalizeFolderID, readLinkFormat, writeLinkFormat, applySiteBranding, type LinkFormat } from './share'
+import { api, type AuthStatus, type Config, type Folder, type ImageList, type Picture } from './api'
+import { folderSelectValue, formatSize, normalizeFolderID, readLinkFormat, validImageName, writeLinkFormat, applySiteBranding, type LinkFormat } from './share'
 
 type View = 'upload' | 'folders' | 'settings'
 const sections = [
-  { id: 'upload' as View, label: '上传图片', icon: UploadFilled, description: '拖拽上传图片，轻松获取分享链接。' },
+  { id: 'upload' as View, label: '上传图片', icon: UploadFilled, description: '拖拽、粘贴或选择图片，轻松获取分享链接。' },
   { id: 'folders' as View, label: '文件夹管理', icon: FolderIcon, description: '按文件夹整理图片，管理你的全部收藏。' },
-  { id: 'settings' as View, label: '系统设置', icon: Setting, description: '调整使用偏好，配置 ShareX，查看当前服务配置。' },
+  { id: 'settings' as View, label: '系统设置', icon: Setting, description: '调整使用偏好，查看当前服务配置。' },
 ]
 function readView(): View {
   const value = location.hash.slice(1)
@@ -36,7 +36,7 @@ const folders = ref<Folder[]>([])
 const data = ref<ImageList>({ items: [], total: 0, all_count: 0, total_size: 0, uncategorized_count: 0, page: 1, page_size: 48 })
 const currentFolder = ref<number | null>(null)
 const page = ref(1), search = ref(''), loading = ref(false), error = ref('')
-const config = ref<Config>({ max_file_size: 20 * 1024 * 1024, auth_required: false, public_base_url: '', admin_token_configured: false, site_name: 'Mio 图床', avatar_url: '/logo.webp', favicon_url: '/logo.webp' })
+const config = ref<Config>({ max_file_size: 20 * 1024 * 1024, auth_required: false, public_base_url: '', site_name: 'Mio 图床', avatar_url: '/logo.webp', favicon_url: '/logo.webp' })
 const selected = ref<string[]>([])
 const auth = ref<AuthStatus>({ initialized: false, authenticated: false, setup_key_required: false })
 const booting = ref(true), bootError = ref('')
@@ -100,6 +100,14 @@ async function changePassword() {
 onMounted(() => { window.addEventListener('mio-auth', requireAuth); window.addEventListener('hashchange', syncView); bootstrap() })
 onUnmounted(() => { window.removeEventListener('mio-auth', requireAuth); window.removeEventListener('hashchange', syncView); clearTimeout(searchTimer) })
 
+async function editImage(picture: Picture) {
+  try {
+    const { value } = await ElMessageBox.prompt('名称不超过 180 个字符，直链保持不变。', '重命名图片', { inputValue: picture.name, inputPlaceholder: '图片名称', confirmButtonText: '保存', cancelButtonText: '取消', inputValidator: (value: string) => validImageName(value) || '名称须为 1–180 个字符，不能包含路径字符、控制字符或无效字符' })
+    await api(`/images/${picture.id}`, { method: 'PATCH', body: JSON.stringify({ name: value.trim() }) })
+    ElMessage.success('图片已重命名，直链保持不变')
+    await load()
+  } catch (e) { if (e !== 'cancel' && e !== 'close') showError(e) }
+}
 async function editFolder(folder?: Folder) {
   try {
     const { value } = await ElMessageBox.prompt('名称不超过 60 个字符', folder ? '重命名文件夹' : '新建文件夹', { inputValue: folder?.name || '', inputPlaceholder: '例如：博客配图', confirmButtonText: '保存', cancelButtonText: '取消', inputValidator: (value: string) => !!value?.trim() && [...value.trim()].length <= 60 || '请输入 1–60 个字符' })
@@ -194,8 +202,8 @@ async function moveImages() {
           <el-button v-if="view === 'folders'" type="primary" size="large" :icon="Plus" @click="editFolder()">新建文件夹</el-button>
         </div>
 
-        <UploadPage v-show="view === 'upload'" ref="uploadPage" v-model:folder="uploadFolder" :folders="folders" :authenticated="auth.authenticated" :max-file-size="config.max_file_size" :link-format="linkFormat" @update:uploading="uploading = $event" @uploaded="load" @copy="copy" />
-        <FolderPage v-if="view === 'folders'" :folders="folders" :data="data" :current-folder="currentFolder" :page="page" :search="search" :loading="loading" :error="error" :selected="selected" :mutating="mutating" :link-format="linkFormat" @navigate="navigate" @load="load" @update:search="search = $event" @update:page="page = $event" @update:selected="selected = $event" @edit-folder="editFolder" @delete-folder="deleteFolder" @open-upload="openUpload" @copy="copy" @open-move="openMove" @delete-images="deleteImages" />
+        <UploadPage v-show="view === 'upload'" ref="uploadPage" v-model:folder="uploadFolder" :folders="folders" :authenticated="auth.authenticated" :active="view === 'upload'" :max-file-size="config.max_file_size" :link-format="linkFormat" @update:uploading="uploading = $event" @uploaded="load" @copy="copy" />
+        <FolderPage v-if="view === 'folders'" :folders="folders" :data="data" :current-folder="currentFolder" :page="page" :search="search" :loading="loading" :error="error" :selected="selected" :mutating="mutating" :link-format="linkFormat" @navigate="navigate" @load="load" @update:search="search = $event" @update:page="page = $event" @update:selected="selected = $event" @edit-folder="editFolder" @delete-folder="deleteFolder" @open-upload="openUpload" @copy="copy" @open-move="openMove" @delete-images="deleteImages" @rename-image="editImage" />
         <SettingsPage v-if="view === 'settings'" v-model:theme-mode="themeMode" v-model:link-format="linkFormat" :username="auth.username" :is-dark="isDark" :config="config" :all-count="data.all_count" :total-size="data.total_size" :uploading="uploading" @open-password="openPassword" @logout="logout" />
         <footer class="page-footer"><span>你的图片，井然有序。</span><span>{{ config.site_name }}</span></footer>
       </section>

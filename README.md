@@ -2,11 +2,11 @@
 
 单用户轻量图床，**Go + SQLite + Vue 3**。管理界面编译后嵌入同一个可执行文件，图片存在本地磁盘，不需要单独的数据库或 Node.js 运行时。
 
-- **上传图片**：选择文件夹、拖拽或多选上传、查看进度、复制 URL 或 Markdown。
-- **文件夹管理**：搜索、缩略图列表、预览原图、分页；创建或重命名文件夹；移动、下载和删除图片。
-- **系统设置**：浅色 / 深色 / 跟随系统，默认分享格式，ShareX 截图上传，查看用量，修改密码。
+- **上传图片**：选择文件夹、拖拽、粘贴或多选上传、查看进度、复制 URL 或 Markdown。
+- **文件夹管理**：搜索、缩略图列表、预览原图、分页；创建或重命名文件夹；重命名、移动、下载和删除图片。
+- **系统设置**：浅色 / 深色 / 跟随系统，默认分享格式，查看用量，修改密码。
 
-格式：JPG / PNG / GIF / WebP，单张不超过 20 MB、3200 万像素，不接收 SVG。管理需要登录；`/i/{id}`、`/t/{id}` 和 `/download/{id}` 公开访问。列表网格走 JPEG 缩略图，点开预览和分享链接仍是原图。单层文件夹，移动图片不会改变直链。删除文件夹后图片回到未分类。
+格式：JPG / PNG / GIF / WebP，单张不超过 20 MB、3200 万像素，不接收 SVG。管理需要登录；`/i/{id}`、`/t/{id}` 和 `/download/{id}` 公开访问。列表网格走 JPEG 缩略图，点开预览和分享链接仍是原图。单层文件夹，移动或重命名图片不会改变直链。删除文件夹后图片回到未分类。
 
 ## 部署
 
@@ -69,18 +69,7 @@ CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/mio-image-hosting .
 | `ADDR` | `127.0.0.1:8080` | 监听地址。容器内必须是 `0.0.0.0:8080` |
 | `DATA_DIR` | `data` | 数据目录；生产建议用绝对路径 |
 | `PUBLIC_BASE_URL` | 空 | 直链根地址，例如 `https://img.example.com` |
-| `ADMIN_TOKEN` | 空 | 可选。给 ShareX 等自动化客户端做 Bearer 鉴权，网页仍走账号登录 |
-
-## ShareX
-
-截图后可以不打开网页，直接传到本图床。结果和网页上传一样，只是省去登录和选文件。ShareX 走 `ADMIN_TOKEN`，不使用管理员密码。
-
-1. 设置环境变量 `ADMIN_TOKEN`（用足够长的随机串），建议同时设置 `PUBLIC_BASE_URL`。
-2. 重启服务。
-3. 登录后台打开系统设置，粘贴 Token 后下载 `.sxcu`；也可以复制仓库里的 `sharex/mio-image-hosting.sxcu`，把 RequestURL、URL、ThumbnailURL 中的域名和 Token 改成自己的。
-4. ShareX：目标 → 自定义上传器设置 → 导入，再设为默认图片上传器。
-
-不要把 Token 发给别人或写进公开仓库。网页登录上传仍然可用。
+| `ADMIN_TOKEN` | 空 | 可选。给自动化客户端做 Bearer 鉴权，网页仍走账号登录 |
 
 ## 站点外观
 
@@ -155,14 +144,14 @@ cd web && npm test && npm run build
 | GET | `/api/config` | 限制、直链域名、站点名称与图标（公开） |
 | GET | `/api/images?page=1&folder=0&q=` | 列表；`folder` 不传为全部，`0` 为未分类 |
 | POST | `/api/images` | 上传：`file`，可选 `folder_id` |
-| PATCH | `/api/images/{id}` | `{"folder_id":1}`，`null` 表示未分类 |
+| PATCH | `/api/images/{id}` | `{"folder_id":1}` 和/或 `{"name":"封面.png"}`；`folder_id` 为 `null` 表示未分类，直链不变 |
 | DELETE | `/api/images/{id}` | 永久删除 |
 | GET / POST | `/api/folders` | 列出 / 新建 |
 | PATCH | `/api/folders/{id}` | 重命名 |
 | DELETE | `/api/folders/{id}` | 删除文件夹，保留图片 |
 | GET | `/i/{id}` | 原图直链 |
 | GET | `/t/{id}` | 列表缩略图（长边约 480，JPEG） |
-| GET | `/download/{id}` | 按原文件名下载 |
+| GET | `/download/{id}` | 按当前显示名下载 |
 
 ## 上传完整性与读取期限
 
@@ -178,8 +167,6 @@ cd web && npm test && npm run build
 
 品牌文件只接受数据目录内的普通图片文件，不接受符号链接或指向数据库、配置和初始化密钥的硬链接。启动时会校验真实图片内容，并从只读内存副本提供头像和图标；运行中替换文件不会直接改变对外响应，重启后重新校验生效。响应 Content-Type 根据实际图片格式确定。ICO 支持 PNG 以及标准 Windows DIB 帧，最多 64 帧。
 
-### 缩略图并发与 ShareX 链接
+### 缩略图并发
 
 同一张图片的缩略图生成、缓存读取和删除通过图片级锁协调：并发请求复用首次生成的缓存，删除会等待该图片的生成任务结束后清理原图和缓存。不同图片使用独立锁，空闲锁会回收。已有大图按需生成缩略图时也会重新检查像素上限。
-
-新导出的 ShareX 配置使用上传地址的域名与响应中的图片 ID 生成完整直链，不依赖响应 URL 是否为相对路径。未设置 `PUBLIC_BASE_URL` 时，本机访问会生成带端口的本机链接；公网分享仍需配置可公开访问的地址。已有 ShareX 配置请重新导出并导入。

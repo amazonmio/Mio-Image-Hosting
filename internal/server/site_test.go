@@ -177,29 +177,3 @@ func TestSiteConfigJSONShape(t *testing.T) {
 		t.Fatal(cfg)
 	}
 }
-
-func TestAdminTokenConfiguredFlag(t *testing.T) {
-	plain, err := New(t.TempDir(), "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer plain.Close()
-	r := httptest.NewRequest(http.MethodGet, "/api/config", nil)
-	w := httptest.NewRecorder()
-	plain.Handler().ServeHTTP(w, r)
-	off := decode[map[string]any](t, w)
-	if off["admin_token_configured"] != false {
-		t.Fatal(off["admin_token_configured"])
-	}
-	secured, err := New(t.TempDir(), "sharex-secret", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer secured.Close()
-	w = httptest.NewRecorder()
-	secured.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/config", nil))
-	on := decode[map[string]any](t, w)
-	if on["admin_token_configured"] != true {
-		t.Fatal(on["admin_token_configured"])
-	}
-}

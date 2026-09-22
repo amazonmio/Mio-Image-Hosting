@@ -5,7 +5,6 @@ export interface Config {
   max_file_size: number
   auth_required: boolean
   public_base_url: string
-  admin_token_configured: boolean
   site_name: string
   avatar_url: string
   favicon_url: string
