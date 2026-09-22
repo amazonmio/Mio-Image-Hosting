@@ -26,7 +26,7 @@ type brandAsset struct {
 
 func forbiddenBrandPath(name string) bool {
 	name = strings.ToLower(filepath.ToSlash(name))
-	return name == "uploads" || strings.HasPrefix(name, "uploads/") || name == "quarantine" || strings.HasPrefix(name, "quarantine/") || name == "app.db" || strings.HasPrefix(name, "app.db-") || name == "config.yaml" || name == "setup-key.txt"
+	return name == "uploads" || strings.HasPrefix(name, "uploads/") || name == "thumbs" || strings.HasPrefix(name, "thumbs/") || name == "quarantine" || strings.HasPrefix(name, "quarantine/") || name == "app.db" || strings.HasPrefix(name, "app.db-") || name == "config.yaml" || name == "setup-key.txt"
 }
 
 func (a *App) readBrandAsset(name, field string) (brandAsset, error) {

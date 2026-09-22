@@ -1,10 +1,11 @@
 export interface Folder { id: number; name: string; count: number }
-export interface Picture { id: string; name: string; size: number; width: number; height: number; mime: string; folder_id: number | null; created_at: string; url: string }
+export interface Picture { id: string; name: string; size: number; width: number; height: number; mime: string; folder_id: number | null; created_at: string; url: string; thumb_url: string }
 export interface ImageList { items: Picture[]; total: number; all_count: number; total_size: number; uncategorized_count: number; page: number; page_size: number }
 export interface Config {
   max_file_size: number
   auth_required: boolean
   public_base_url: string
+  admin_token_configured: boolean
   site_name: string
   avatar_url: string
   favicon_url: string

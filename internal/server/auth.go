@@ -123,7 +123,7 @@ func (a *App) browserRequest(w http.ResponseWriter, r *http.Request) bool {
 			return false
 		}
 	}
-	if r.Method != "GET" && r.Method != "HEAD" && r.Header.Get("X-Mio-Request") != "1" && !a.apiTokenOK(r) {
+	if r.Method != "GET" && r.Method != "HEAD" && r.Header.Get("X-Mio-Request") != "1" && !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
 		fail(w, 403, "请求校验失败，请刷新页面重试")
 		return false
 	}

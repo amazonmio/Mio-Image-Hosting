@@ -33,6 +33,9 @@ const emit = defineEmits<{
 const title = computed(() => folderTitle(props.currentFolder, props.folders))
 const activeFolder = computed(() => props.folders.find(folder => folder.id === props.currentFolder))
 const previewList = computed(() => props.data.items.map(item => item.url))
+function thumbSrc(picture: Picture) {
+  return picture.thumb_url || picture.url
+}
 
 function toggle(id: string, checked: unknown) {
   emit('update:selected', checked ? [...props.selected, id] : props.selected.filter(value => value !== id))
@@ -101,7 +104,7 @@ function imageCommand(command: string, picture: Picture) {
     <div v-else class="image-grid" :aria-busy="loading">
       <article v-for="(picture, index) in data.items" :key="picture.id" :class="['image-card', { selected: selected.includes(picture.id) }]">
         <div class="image-preview">
-          <el-image :src="picture.url" :alt="picture.name" fit="cover" loading="lazy" :preview-src-list="previewList" :initial-index="index" preview-teleported>
+          <el-image :src="thumbSrc(picture)" :alt="picture.name" fit="cover" loading="lazy" :preview-src-list="previewList" :initial-index="index" preview-teleported>
             <template #error>
               <div class="preview-error"><el-icon><PictureIcon /></el-icon><span>图片加载失败</span></div>
             </template>

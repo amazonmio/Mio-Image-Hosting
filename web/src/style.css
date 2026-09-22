@@ -40,6 +40,9 @@
 .config-list dt { color: #8b95a6; flex-shrink: 0; }
 .config-list dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
 .configuration-note { font-size: 11px; line-height: 1.7; color: #98a2b3; margin: 20px 0 0; }
+.settings-card code { font-size: 11px; }
+.settings-card .el-alert { margin-bottom: 4px; }
+.sharex-token { display: grid; gap: 9px; margin: 18px 0 16px; }
 @media(max-width:720px) {
   .app-shell { display: flex; }
   .sidebar { width: 92px; height: 100dvh; position: sticky; top: 0; padding: 24px 7px; border-right: 1px solid #e8ebf2; border-bottom: 0; }

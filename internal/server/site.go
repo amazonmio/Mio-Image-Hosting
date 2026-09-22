@@ -138,12 +138,13 @@ func validateSiteName(name string) error {
 
 func (a *App) siteConfig() map[string]any {
 	return map[string]any{
-		"max_file_size":   maxFileSize,
-		"auth_required":   true,
-		"public_base_url": a.baseURL,
-		"site_name":       a.siteName,
-		"avatar_url":      brandAvatarURL,
-		"favicon_url":     brandFaviconURL,
+		"max_file_size":          maxFileSize,
+		"auth_required":          true,
+		"public_base_url":        a.baseURL,
+		"admin_token_configured": a.token != "",
+		"site_name":              a.siteName,
+		"avatar_url":             brandAvatarURL,
+		"favicon_url":            brandFaviconURL,
 	}
 }
 

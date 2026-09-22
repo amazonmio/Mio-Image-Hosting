@@ -62,3 +62,41 @@ export function folderTitle(id: number | null, folders: { id: number; name: stri
   if (id === 0) return '未分类'
   return folders.find(folder => folder.id === id)?.name || '文件夹'
 }
+
+export const sharexTokenPlaceholder = 'YOUR_ADMIN_TOKEN'
+
+export function sharexRequestURL(base: string) {
+  try { const url = new URL(base.trim()); return ['http:', 'https:'].includes(url.protocol) ? url.origin + '/api/images' : '' } catch { return '' }
+}
+
+export function sharexUploader(options: { siteName: string; requestURL: string; token: string }) {
+  const token = options.token.trim() || sharexTokenPlaceholder
+  const origin = new URL(options.requestURL).origin
+  return {
+    Version: '17.0.0',
+    Name: options.siteName.trim() || 'Mio 图床',
+    DestinationType: 'ImageUploader',
+    RequestMethod: 'POST',
+    RequestURL: options.requestURL,
+    Headers: { Authorization: 'Bearer ' + token },
+    Body: 'MultipartFormData',
+    FileFormName: 'file',
+    URL: origin + '/i/{json:id}',
+    ThumbnailURL: origin + '/t/{json:id}',
+    ErrorMessage: '{json:error}',
+  }
+}
+
+export function sharexUploaderJSON(options: { siteName: string; requestURL: string; token: string }) {
+  return JSON.stringify(sharexUploader(options), null, 2)
+}
+
+export function downloadTextFile(name: string, text: string) {
+  if (typeof document === 'undefined') return
+  const href = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = href
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(href)
+}

@@ -106,6 +106,9 @@ func TestImageLifecycle(t *testing.T) {
 	if p.URL != "https://img.example.com/i/"+p.ID {
 		t.Fatal(p.URL)
 	}
+	if p.ThumbURL != "https://img.example.com/t/"+p.ID {
+		t.Fatal(p.ThumbURL)
+	}
 	raw := request(t, a, "GET", "/i/"+p.ID, "", 200)
 	if !bytes.Equal(raw.Body.Bytes(), payload) {
 		t.Fatal("image content changed")
@@ -146,11 +149,16 @@ func TestImageLifecycle(t *testing.T) {
 	request(t, a, "GET", "/i/"+p.ID, "", 200)
 	request(t, a, "DELETE", "/api/images/"+p.ID, "", 200)
 	request(t, a, "GET", "/i/"+p.ID, "", 404)
+	request(t, a, "GET", "/t/"+p.ID, "", 404)
 	request(t, a, "GET", "/download/"+p.ID, "", 404)
 	request(t, a, "DELETE", "/api/images/"+p.ID, "", 404)
 	entries, err := os.ReadDir(a.uploads)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("file cleanup failed: %v %v", entries, err)
+	}
+	thumbs, err := os.ReadDir(a.thumbs)
+	if err != nil || len(thumbs) != 0 {
+		t.Fatalf("thumb cleanup failed: %v %v", thumbs, err)
 	}
 }
 func TestValidation(t *testing.T) {
@@ -316,6 +324,52 @@ func TestOrphanUploadQuarantineAndSchemaVersion(t *testing.T) {
 		t.Fatal("quarantined content changed")
 	}
 	request(t, a, "GET", "/i/"+p.ID, "", 200)
+}
+
+func TestShareXStyleUpload(t *testing.T) {
+	a := testApp(t, "sharex-secret")
+	payload := pngBytes(t)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	file, err := writer.CreateFormFile("file", "screenshot.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = file.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw := body.Bytes()
+	contentType := writer.FormDataContentType()
+	post := func(token string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/api/images", bytes.NewReader(raw))
+		r.Header.Set("Content-Type", contentType)
+		r.Header.Set("User-Agent", "ShareX/17.0.0")
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		w := httptest.NewRecorder()
+		a.Handler().ServeHTTP(w, r)
+		return w
+	}
+	ok := post("sharex-secret")
+	if ok.Code != 201 {
+		t.Fatalf("sharex upload: %d %s", ok.Code, ok.Body.String())
+	}
+	p := decode[Picture](t, ok)
+	if p.URL != "https://img.example.com/i/"+p.ID || p.ThumbURL == "" {
+		t.Fatal(p)
+	}
+	wrong := post("wrong-secret")
+	if wrong.Code != 401 || !strings.Contains(wrong.Body.String(), "ADMIN_TOKEN") {
+		t.Fatalf("wrong token: %d %s", wrong.Code, wrong.Body.String())
+	}
+	missing := post("")
+	if missing.Code != 403 {
+		t.Fatalf("missing token: %d %s", missing.Code, missing.Body.String())
+	}
 }
 
 func TestRejectsNewerSchema(t *testing.T) {

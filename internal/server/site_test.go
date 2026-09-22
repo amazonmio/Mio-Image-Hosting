@@ -116,6 +116,12 @@ func TestSiteConfigRejectsUnsafeValues(t *testing.T) {
 	if _, err := New(dir, "", ""); err == nil {
 		t.Fatal("accepted missing avatar")
 	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("avatar: thumbs/x.jpg\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(dir, "", ""); err == nil {
+		t.Fatal("accepted thumbs path")
+	}
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("site_name: "+strings.Repeat("名", 61)+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -169,5 +175,31 @@ func TestSiteConfigJSONShape(t *testing.T) {
 	}
 	if cfg.SiteName == "" || cfg.AvatarURL == "" || cfg.FaviconURL == "" {
 		t.Fatal(cfg)
+	}
+}
+
+func TestAdminTokenConfiguredFlag(t *testing.T) {
+	plain, err := New(t.TempDir(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plain.Close()
+	r := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	w := httptest.NewRecorder()
+	plain.Handler().ServeHTTP(w, r)
+	off := decode[map[string]any](t, w)
+	if off["admin_token_configured"] != false {
+		t.Fatal(off["admin_token_configured"])
+	}
+	secured, err := New(t.TempDir(), "sharex-secret", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secured.Close()
+	w = httptest.NewRecorder()
+	secured.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/config", nil))
+	on := decode[map[string]any](t, w)
+	if on["admin_token_configured"] != true {
+		t.Fatal(on["admin_token_configured"])
 	}
 }

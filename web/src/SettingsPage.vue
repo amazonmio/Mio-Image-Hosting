@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { formatSize, type LinkFormat } from './share'
+import { computed, ref } from 'vue'
+import { downloadTextFile, formatSize, sharexRequestURL, sharexUploaderJSON, type LinkFormat } from './share'
 import type { ThemeMode } from './theme'
 import type { Config } from './api'
 
-defineProps<{
+const props = defineProps<{
   username?: string
   isDark: boolean
   config: Config
@@ -14,6 +15,16 @@ defineProps<{
 const themeMode = defineModel<ThemeMode>('themeMode', { required: true })
 const linkFormat = defineModel<LinkFormat>('linkFormat', { required: true })
 defineEmits<{ openPassword: []; logout: [] }>()
+
+const token = ref('')
+const requestURL = computed(() => sharexRequestURL(props.config.public_base_url || (typeof location === 'undefined' ? '' : location.origin)))
+function downloadShareX() {
+  downloadTextFile('mio-image-hosting.sxcu', sharexUploaderJSON({
+    siteName: props.config.site_name,
+    requestURL: requestURL.value,
+    token: token.value,
+  }))
+}
 </script>
 
 <template>
@@ -62,6 +73,24 @@ defineEmits<{ openPassword: []; logout: [] }>()
         </el-select>
       </div>
       <div class="theme-note">自动记住当前浏览器的选择，仅影响本机。</div>
+    </div>
+    <div class="settings-card">
+      <div class="card-heading">
+        <h2>ShareX 上传</h2>
+        <p>截图后可直接传到本图床。ShareX 使用环境变量 <code>ADMIN_TOKEN</code>，不使用网页登录密码。</p>
+      </div>
+      <el-alert v-if="!config.admin_token_configured" title="当前服务还没有设置 ADMIN_TOKEN，ShareX 无法上传。写入环境变量后重启服务。" type="warning" show-icon :closable="false" />
+      <dl class="config-list">
+        <div><dt>上传地址</dt><dd>{{ requestURL }}</dd></div>
+        <div><dt>ADMIN_TOKEN</dt><dd>{{ config.admin_token_configured ? '已配置（不会显示原文）' : '未设置' }}</dd></div>
+      </dl>
+      <label class="field-label sharex-token">粘贴 ADMIN_TOKEN，仅用于生成本地配置文件
+        <el-input v-model="token" type="password" show-password autocomplete="off" aria-label="ADMIN_TOKEN" placeholder="不会发送到服务器" />
+      </label>
+      <div class="account-actions">
+        <el-button type="primary" :disabled="!requestURL" @click="downloadShareX">下载 ShareX 配置</el-button>
+      </div>
+      <p class="configuration-note">导入后，在 ShareX 里把该上传器设为默认图片目标。建议同时设置 PUBLIC_BASE_URL，这样返回的直链是公网域名。不要把 Token 发给别人或写进公开仓库。</p>
     </div>
     <div class="settings-card">
       <div class="card-heading">

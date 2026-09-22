@@ -16,7 +16,7 @@ type View = 'upload' | 'folders' | 'settings'
 const sections = [
   { id: 'upload' as View, label: '上传图片', icon: UploadFilled, description: '拖拽上传图片，轻松获取分享链接。' },
   { id: 'folders' as View, label: '文件夹管理', icon: FolderIcon, description: '按文件夹整理图片，管理你的全部收藏。' },
-  { id: 'settings' as View, label: '系统设置', icon: Setting, description: '调整使用偏好，查看当前服务配置。' },
+  { id: 'settings' as View, label: '系统设置', icon: Setting, description: '调整使用偏好，配置 ShareX，查看当前服务配置。' },
 ]
 function readView(): View {
   const value = location.hash.slice(1)
@@ -36,7 +36,7 @@ const folders = ref<Folder[]>([])
 const data = ref<ImageList>({ items: [], total: 0, all_count: 0, total_size: 0, uncategorized_count: 0, page: 1, page_size: 48 })
 const currentFolder = ref<number | null>(null)
 const page = ref(1), search = ref(''), loading = ref(false), error = ref('')
-const config = ref<Config>({ max_file_size: 20 * 1024 * 1024, auth_required: false, public_base_url: '', site_name: 'Mio 图床', avatar_url: '/logo.webp', favicon_url: '/logo.webp' })
+const config = ref<Config>({ max_file_size: 20 * 1024 * 1024, auth_required: false, public_base_url: '', admin_token_configured: false, site_name: 'Mio 图床', avatar_url: '/logo.webp', favicon_url: '/logo.webp' })
 const selected = ref<string[]>([])
 const auth = ref<AuthStatus>({ initialized: false, authenticated: false, setup_key_required: false })
 const booting = ref(true), bootError = ref('')

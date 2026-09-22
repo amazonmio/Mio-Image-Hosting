@@ -35,15 +35,17 @@ const (
 )
 
 type App struct {
-	decodeSlots                  chan struct{}
-	authMu                       sync.Mutex
-	setupKey, setupKeyPath       string
-	attempts                     map[string]authAttempt
-	db                           *sql.DB
-	dir, uploads, token, baseURL string
-	siteName                     string
-	avatar, favicon              brandAsset
-	mu                           sync.Mutex
+	imageLocksMu                         sync.Mutex
+	imageLocks                           map[string]*imageLock
+	decodeSlots                          chan struct{}
+	authMu                               sync.Mutex
+	setupKey, setupKeyPath               string
+	attempts                             map[string]authAttempt
+	db                                   *sql.DB
+	dir, uploads, thumbs, token, baseURL string
+	siteName                             string
+	avatar, favicon                      brandAsset
+	mu                                   sync.Mutex
 }
 type Picture struct {
 	ID        string `json:"id"`
@@ -55,6 +57,7 @@ type Picture struct {
 	FolderID  *int64 `json:"folder_id"`
 	CreatedAt string `json:"created_at"`
 	URL       string `json:"url"`
+	ThumbURL  string `json:"thumb_url"`
 }
 type Folder struct {
 	ID    int64  `json:"id"`
@@ -74,7 +77,11 @@ func New(dir, token, baseURL string) (*App, error) {
 		return nil, err
 	}
 	uploads := filepath.Join(abs, "uploads")
+	thumbs := filepath.Join(abs, "thumbs")
 	if err = os.MkdirAll(uploads, 0700); err != nil {
+		return nil, err
+	}
+	if err = os.MkdirAll(thumbs, 0700); err != nil {
 		return nil, err
 	}
 	db, err := sql.Open("sqlite", filepath.Join(abs, "app.db"))
@@ -86,7 +93,7 @@ func New(dir, token, baseURL string) (*App, error) {
 		db.Close()
 		return nil, err
 	}
-	app := &App{decodeSlots: make(chan struct{}, 1), db: db, dir: abs, uploads: uploads, token: token, baseURL: strings.TrimRight(baseURL, "/")}
+	app := &App{decodeSlots: make(chan struct{}, 1), db: db, dir: abs, uploads: uploads, thumbs: thumbs, token: token, baseURL: strings.TrimRight(baseURL, "/")}
 	if err = app.loadSiteConfig(); err != nil {
 		db.Close()
 		return nil, err
@@ -96,6 +103,10 @@ func New(dir, token, baseURL string) (*App, error) {
 		return nil, err
 	}
 	if err = app.recoverUploads(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err = app.recoverThumbs(); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -187,6 +198,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("DELETE /api/folders/{id}", a.protect(http.HandlerFunc(a.deleteFolder)))
 	mux.HandleFunc("GET /i/{id}", a.serveImage)
 	mux.HandleFunc("GET /download/{id}", a.serveImage)
+	mux.HandleFunc("GET /t/{id}", a.serveThumbnail)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "接口不存在") })
 	assets, _ := fs.Sub(frontend.Files, "dist")
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +244,11 @@ func (a *App) protect(next http.Handler) http.Handler {
 				return
 			}
 			if name == "" {
-				fail(w, 401, "登录已过期，请重新登录")
+				if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+					fail(w, 401, "上传令牌无效，请检查 ADMIN_TOKEN")
+				} else {
+					fail(w, 401, "登录已过期，请重新登录")
+				}
 				return
 			}
 		}
@@ -314,6 +330,7 @@ func (a *App) listImages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.URL = a.imageURL(p.ID)
+		p.ThumbURL = a.thumbURL(p.ID)
 		items = append(items, p)
 	}
 	if err = rows.Err(); err != nil {
@@ -410,7 +427,7 @@ func (a *App) upload(w http.ResponseWriter, r *http.Request) {
 	if len([]rune(name)) > 180 {
 		name = string([]rune(name)[:180])
 	}
-	p := Picture{ID: id, Name: name, Size: size, Width: cfg.Width, Height: cfg.Height, MIME: mime.TypeByExtension(ext), FolderID: folderID, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), URL: a.imageURL(id)}
+	p := Picture{ID: id, Name: name, Size: size, Width: cfg.Width, Height: cfg.Height, MIME: mime.TypeByExtension(ext), FolderID: folderID, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), URL: a.imageURL(id), ThumbURL: a.thumbURL(id)}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !a.folderExists(folderID) {
@@ -427,6 +444,9 @@ func (a *App) upload(w http.ResponseWriter, r *http.Request) {
 		os.Remove(dest)
 		internal(w, err)
 		return
+	}
+	if err := a.writeThumbFromOriginal(r.Context(), dest, id); err != nil {
+		log.Printf("thumbnail %s: %v", id, err)
 	}
 	reply(w, 201, p)
 }
@@ -460,6 +480,12 @@ func (a *App) deleteImage(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	id := r.PathValue("id")
+	release, err := a.lockImage(r.Context(), id)
+	if err != nil {
+		fail(w, http.StatusRequestTimeout, "删除请求已取消，请重试")
+		return
+	}
+	defer release()
 	var stored string
 	if err := a.db.QueryRow("SELECT id FROM images WHERE id=?", id).Scan(&stored); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -492,6 +518,7 @@ func (a *App) deleteImage(w http.ResponseWriter, r *http.Request) {
 			log.Printf("cleanup %s: %v", id, err)
 		}
 	}
+	a.removeThumb(stored)
 	reply(w, 200, map[string]bool{"ok": true})
 }
 func folderName(w http.ResponseWriter, r *http.Request) (string, bool) {

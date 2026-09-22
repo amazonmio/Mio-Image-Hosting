@@ -1,0 +1,15 @@
+{
+  "Version": "17.0.0",
+  "Name": "Mio 图床",
+  "DestinationType": "ImageUploader",
+  "RequestMethod": "POST",
+  "RequestURL": "https://img.example.com/api/images",
+  "Headers": {
+    "Authorization": "Bearer YOUR_ADMIN_TOKEN"
+  },
+  "Body": "MultipartFormData",
+  "FileFormName": "file",
+  "URL": "https://img.example.com/i/{json:id}",
+  "ThumbnailURL": "https://img.example.com/t/{json:id}",
+  "ErrorMessage": "{json:error}"
+}
