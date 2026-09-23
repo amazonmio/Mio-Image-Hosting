@@ -78,7 +78,7 @@ function imageCommand(command: string, picture: Picture) {
           <el-button text type="danger" @click="emit('deleteFolder', activeFolder)">删除文件夹</el-button>
         </template>
       </div>
-      <el-input :model-value="search" :prefix-icon="Search" clearable placeholder="搜索图片名称…" aria-label="搜索图片名称" class="search-input" @update:model-value="value => emit('update:search', String(value))" />
+      <el-input :model-value="search" :prefix-icon="Search" clearable placeholder="搜索图片名称…" aria-label="搜索图片名称" class="search-input" @update:model-value="(value: string) => emit('update:search', String(value))" />
     </div>
     <div v-if="data.items.length && !error" class="selection-bar">
       <el-checkbox :model-value="selected.length === data.items.length" :indeterminate="selected.length > 0 && selected.length < data.items.length" @change="selectAll">{{ selected.length ? `已选择 ${selected.length} 张` : '选择本页' }}</el-checkbox>
@@ -136,7 +136,7 @@ function imageCommand(command: string, picture: Picture) {
       </article>
     </div>
     <div v-if="data.total > 48" class="pagination">
-      <el-pagination :current-page="page" :page-size="48" :total="data.total" layout="prev, pager, next" background @update:current-page="value => emit('update:page', value)" />
+      <el-pagination :current-page="page" :page-size="48" :total="data.total" layout="prev, pager, next" background @update:current-page="(value: number) => emit('update:page', value)" />
     </div>
   </section>
 </template>
