@@ -402,7 +402,7 @@ func (a *App) upload(w http.ResponseWriter, r *http.Request) {
 		internal(w, err)
 		return
 	}
-	random := make([]byte, 16)
+	random := make([]byte, 8)
 	if _, err = rand.Read(random); err != nil {
 		internal(w, err)
 		return
@@ -436,7 +436,28 @@ func (a *App) upload(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "文件夹不存在，请刷新后重试")
 		return
 	}
-	dest := filepath.Join(a.uploads, id)
+	var dest string
+	available := false
+	for attempt := 0; attempt < 8; attempt++ {
+		dest = filepath.Join(a.uploads, id)
+		if _, checkErr := os.Lstat(dest); os.IsNotExist(checkErr) {
+			available = true
+			break
+		} else if checkErr != nil {
+			internal(w, checkErr)
+			return
+		}
+		if _, err = rand.Read(random); err != nil {
+			internal(w, err)
+			return
+		}
+		id = hex.EncodeToString(random) + ext
+	}
+	if !available {
+		fail(w, http.StatusConflict, "图片编号冲突，请重试上传")
+		return
+	}
+	p.ID, p.URL, p.ThumbURL = id, a.imageURL(id), a.thumbURL(id)
 	if err = os.Rename(tmp.Name(), dest); err != nil {
 		internal(w, err)
 		return

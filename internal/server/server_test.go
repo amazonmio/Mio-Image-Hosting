@@ -412,3 +412,30 @@ func TestRejectsNewerSchema(t *testing.T) {
 		t.Fatal("accepted a newer database schema")
 	}
 }
+
+func TestShortImageIDsAndLegacyLinks(t *testing.T) {
+	a := testApp(t, "")
+	first := decode[Picture](t, sendUpload(t, a, pngBytes(t), "", 201))
+	second := decode[Picture](t, sendUpload(t, a, pngBytes(t), "", 201))
+	for _, picture := range []Picture{first, second} {
+		if len(picture.ID) != 20 || !strings.HasSuffix(picture.ID, ".png") {
+			t.Fatalf("new PNG ID should be 16 hex digits plus extension: %s", picture.ID)
+		}
+		if len(picture.URL) != len("https://img.example.com/i/")+20 {
+			t.Fatalf("unexpected link length: %s", picture.URL)
+		}
+	}
+	if first.ID == second.ID {
+		t.Fatal("different images received the same ID")
+	}
+	legacy := strings.Repeat("f", 32) + ".png"
+	if err := os.WriteFile(filepath.Join(a.uploads, legacy), pngBytes(t), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.db.Exec("INSERT INTO images(id,name,size,width,height,mime,created_at) VALUES(?,?,?,?,?,?,?)", legacy, "旧图.png", 1, 8, 6, "image/png", "2026-01-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	request(t, a, "GET", "/i/"+legacy, "", 200)
+	request(t, a, "GET", "/download/"+legacy, "", 200)
+	request(t, a, "GET", "/t/"+legacy, "", 200)
+}
