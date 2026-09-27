@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filesFromClipboardItems, folderSelectValue, folderTitle, formatSize, fullURL, markdown, normalizeFolderID, normalizeUploadFile, pasteImageName, shareText, validImageName } from './share'
+import { filesFromClipboardData, filesFromClipboardItems, folderSelectValue, folderTitle, formatSize, fullURL, markdown, normalizeFolderID, normalizeUploadFile, pasteImageName, shareText, validImageName } from './share'
 
 describe('normalizeFolderID', () => {
   it('treats missing and zero as uncategorized', () => {
@@ -70,6 +70,48 @@ describe('clipboard upload files', () => {
     expect(files).toHaveLength(1)
     expect(files[0].name).toMatch(/\.jpg$/)
     expect(files[0].type).toBe('image/jpeg')
+  })
+
+  it('keeps every copied file when the clipboard items contain only a preview', () => {
+    const first = new File([new Uint8Array([1])], 'first.png', { type: 'image/png' })
+    const second = new File([new Uint8Array([2])], 'second.jpg', { type: 'image/jpeg' })
+    const preview = new File([new Uint8Array([3])], 'preview.png', { type: 'image/png' })
+    const files = filesFromClipboardData({
+      files: [first, second],
+      items: [{ kind: 'file', getAsFile: () => preview }],
+    })
+    expect(files).toEqual([first, second])
+  })
+
+  it('uses clipboard items when they contain more images than the file list', () => {
+    const first = new File([new Uint8Array([1])], 'first.png', { type: 'image/png' })
+    const second = new File([new Uint8Array([2])], 'second.png', { type: 'image/png' })
+    const files = filesFromClipboardData({
+      files: [first],
+      items: [
+        { kind: 'file', getAsFile: () => first },
+        { kind: 'file', getAsFile: () => second },
+      ],
+    })
+    expect(files).toEqual([first, second])
+  })
+
+  it('does not duplicate the same image exposed by both clipboard lists', () => {
+    const image = new File([new Uint8Array([1])], '', { type: 'image/png' })
+    const files = filesFromClipboardData({
+      files: [image],
+      items: [{ kind: 'file', getAsFile: () => image }],
+    }, Date.UTC(2026, 8, 27))
+    expect(files).toHaveLength(1)
+    expect(files[0].name).toMatch(/\.png$/)
+  })
+
+  it('filters non-image files and still accepts an image from the other list', () => {
+    const image = new File([new Uint8Array([1])], 'photo.webp', { type: 'image/webp' })
+    expect(filesFromClipboardData({
+      files: [new File(['notes'], 'notes.txt', { type: 'text/plain' })],
+      items: [{ kind: 'file', getAsFile: () => image }],
+    })).toEqual([image])
   })
 })
 

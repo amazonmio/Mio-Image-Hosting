@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import { UploadFilled, Download, Check, Close } from '@element-plus/icons-vue'
 import { upload, type Folder, type Picture } from './api'
-import { filesFromClipboardItems, formatSize, normalizeUploadFile, shareText, shouldIgnorePasteTarget, type LinkFormat } from './share'
+import { filesFromClipboardData, formatSize, normalizeUploadFile, shareText, shouldIgnorePasteTarget, type LinkFormat } from './share'
 
 type QueueItem = { key: number; file: File; percent: number; status: 'waiting' | 'uploading' | 'done' | 'error'; error?: string; result?: Picture }
 
@@ -36,15 +36,15 @@ function addFiles(files: FileList | File[]) {
   }
 }
 function paste(event: ClipboardEvent) {
-  if (!props.active || uploading.value || shouldIgnorePasteTarget(event.target)) return
-  const files = filesFromClipboardItems(event.clipboardData?.items)
+  if (!props.active || shouldIgnorePasteTarget(event.target)) return
+  const files = filesFromClipboardData(event.clipboardData)
   if (!files.length) return
   event.preventDefault()
   addFiles(files)
 }
 function drop(event: DragEvent) {
   dragging.value = false
-  if (!uploading.value && event.dataTransfer?.files) addFiles(event.dataTransfer.files)
+  if (event.dataTransfer?.files) addFiles(event.dataTransfer.files)
 }
 function inputFiles(event: Event) {
   const input = event.target as HTMLInputElement
@@ -113,7 +113,7 @@ defineExpose({ reset })
         <el-option v-for="folder in folders" :key="folder.id" :label="folder.name" :value="folder.id" />
       </el-select>
       <input ref="fileInput" type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" hidden @change="inputFiles" />
-      <button :class="['dropzone', { dragging }]" :disabled="uploading" @click="fileInput?.click()" @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="drop">
+      <button :class="['dropzone', { dragging }]" @click="fileInput?.click()" @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="drop">
         <el-icon><UploadFilled /></el-icon>
         <strong>拖拽或粘贴图片到这里，或<span>点击选择</span></strong>
         <small>支持 JPG、PNG、GIF、WebP · 也可 Ctrl+V 粘贴 · 单张最大 20 MB</small>

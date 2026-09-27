@@ -119,6 +119,22 @@ export function filesFromClipboardItems(items: ArrayLike<{ kind: string; getAsFi
   return files
 }
 
+type ClipboardFiles = {
+  files?: ArrayLike<File> | null
+  items?: ArrayLike<{ kind: string; getAsFile: () => File | null }> | null
+}
+
+export function filesFromClipboardData(data: ClipboardFiles | null, now = Date.now()): File[] {
+  if (!data) return []
+  const files = Array.from(data.files ?? [])
+    .map(file => normalizeUploadFile(file, now))
+    .filter((file): file is File => file !== null)
+  const items = filesFromClipboardItems(data.items, now)
+  // Browsers can expose the same clipboard files through both lists. Choose
+  // the more complete view instead of queueing every image twice.
+  return files.length >= items.length ? files : items
+}
+
 export function shouldIgnorePasteTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false
   const tag = target.tagName
