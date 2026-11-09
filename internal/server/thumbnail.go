@@ -224,21 +224,7 @@ func (a *App) removeThumb(id string) {
 }
 
 func (a *App) recoverThumbs() error {
-	known := map[string]struct{}{}
-	rows, err := a.db.Query("SELECT id FROM images")
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
-		}
-		known[id] = struct{}{}
-	}
-	err = rows.Err()
-	rows.Close()
+	known, err := a.registeredImageIDs()
 	if err != nil {
 		return err
 	}

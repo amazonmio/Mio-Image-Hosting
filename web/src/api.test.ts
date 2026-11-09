@@ -10,7 +10,9 @@ class FakeXHR {
   onabort?: () => void
   onerror?: () => void
   ontimeout?: () => void
-  open() { FakeXHR.last = this }
+  open() {
+    FakeXHR.last = this
+  }
   setRequestHeader() {}
   send = vi.fn()
   abort = vi.fn(() => this.onabort?.())
@@ -19,8 +21,11 @@ afterEach(() => vi.unstubAllGlobals())
 describe('upload cancellation', () => {
   it('does not send a pre-cancelled upload', async () => {
     vi.stubGlobal('XMLHttpRequest', FakeXHR)
-    const controller = new AbortController(); controller.abort()
-    await expect(upload(new File(['x'], 'x.png'), null, () => {}, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      upload(new File(['x'], 'x.png'), null, () => {}, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' })
   })
   it('aborts an in-flight upload and settles the promise', async () => {
     vi.stubGlobal('XMLHttpRequest', FakeXHR)

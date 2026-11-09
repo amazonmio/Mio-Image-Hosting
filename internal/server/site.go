@@ -114,6 +114,7 @@ func (a *App) ensureDefaultBrandFiles() error {
 	}
 	return nil
 }
+
 func (a *App) useBrandFiles(avatar, favicon string) error {
 	var err error
 	a.avatar, err = a.readBrandAsset(avatar, "avatar")

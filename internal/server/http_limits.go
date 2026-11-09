@@ -14,8 +14,18 @@ const uploadBodyTimeout = 4 * time.Minute
 // The connection-level timeout is a backstop. Route-specific deadlines start
 // after headers and leave time within the browser's five-minute upload timeout.
 func NewHTTPServer(addr string, handler http.Handler) *http.Server {
-	return &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 5 * time.Minute, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       5 * time.Minute,
+		// Includes body reading and handler work; leaves time after a four-minute upload.
+		WriteTimeout:   6 * time.Minute,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
 }
+
 func withBodyDeadlines(next http.Handler, jsonLimit, uploadLimit time.Duration) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != "GET" && r.Method != "HEAD" {
@@ -34,6 +44,7 @@ func withBodyDeadlines(next http.Handler, jsonLimit, uploadLimit time.Duration) 
 		next.ServeHTTP(w, r)
 	})
 }
+
 func bodyReadError(w http.ResponseWriter, err error, fallback string) {
 	var networkError net.Error
 	if errors.As(err, &networkError) && networkError.Timeout() {

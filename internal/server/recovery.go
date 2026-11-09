@@ -12,21 +12,7 @@ import (
 // Only registered originals are returned to the active uploads directory.
 // Unknown files are preserved outside the public image paths for manual recovery.
 func (a *App) recoverUploads() error {
-	known := map[string]struct{}{}
-	rows, err := a.db.Query("SELECT id FROM images")
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
-		}
-		known[id] = struct{}{}
-	}
-	err = rows.Err()
-	rows.Close()
+	known, err := a.registeredImageIDs()
 	if err != nil {
 		return err
 	}
@@ -106,4 +92,26 @@ func (a *App) recoverUploads() error {
 		}
 	}
 	return nil
+}
+
+func (a *App) registeredImageIDs() (map[string]struct{}, error) {
+	known := map[string]struct{}{}
+	rows, err := a.db.Query("SELECT id FROM images")
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		known[id] = struct{}{}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	return known, nil
 }
